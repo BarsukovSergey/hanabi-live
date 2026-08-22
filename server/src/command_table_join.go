@@ -35,6 +35,13 @@ func commandTableJoin(ctx context.Context, s *Session, d *CommandData) {
 		return
 	}
 
+	// User-initiated joins do not have pre-fetched stats. Release t.Lock before querying the
+	// database: websocketDisconnect holds sessions.ConnectMutex while acquiring table locks, so a
+	// slow query here could block all connects/disconnects long enough for go-deadlock to terminate
+	// the server.
+	//
+	// Internal callers such as tableCreate and tableRestart already hold the relevant locks. They
+	// must pre-fetch stats before acquiring those locks and pass them through d.PregameStats.
 	if d.PregameStats == nil {
 		if d.NoTableLock {
 			logger.Error("commandTableJoin was called without pre-fetched stats while the caller held the table lock.")
@@ -79,6 +86,9 @@ func commandTableJoin(ctx context.Context, s *Session, d *CommandData) {
 			if !validateTableJoinState(s, t) {
 				return
 			}
+
+			// The table owner can change the variant while the database queries are running.
+			// Repeat the variant query until the fetched stats match the locked table state.
 			if t.Options.VariantName == variantName {
 				d.PregameStats = &PregameStats{NumGames: numGames, Variant: variantStats}
 				break
@@ -171,6 +181,7 @@ func tableJoin(ctx context.Context, s *Session, d *CommandData, t *Table) {
 	logger.Info(t.GetName() + "User \"" + s.Username + "\" joined. " +
 		"(There are now " + strconv.Itoa(len(t.Players)+1) + " players.)")
 
+	// commandTableJoin guarantees that stats were fetched before tableJoin acquires tables.Lock.
 	p := &Player{
 		UserID:     s.UserID,
 		Name:       s.Username,
