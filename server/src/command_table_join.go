@@ -22,90 +22,131 @@ func commandTableJoin(ctx context.Context, s *Session, d *CommandData) {
 	if !exists {
 		return
 	}
+	tableLocked := !d.NoTableLock
 	if !d.NoTableLock {
-		defer t.Unlock(ctx)
+		defer func() {
+			if tableLocked {
+				t.Unlock(ctx)
+			}
+		}()
 	}
 
+	if !validateTableJoinState(s, t) {
+		return
+	}
+
+	if d.PregameStats == nil {
+		if d.NoTableLock {
+			logger.Error("commandTableJoin was called without pre-fetched stats while the caller held the table lock.")
+			s.Error(DefaultErrorMsg)
+			return
+		}
+
+		passwordHash := t.PasswordHash
+		variantName := t.Options.VariantName
+		t.Unlock(ctx)
+		tableLocked = false
+
+		if !validateTableJoinPassword(s, d, passwordHash) {
+			return
+		}
+
+		numGames, err := models.Games.GetUserNumGames(s.UserID, false)
+		if err != nil {
+			logger.Error("Failed to pre-fetch the number of non-speedrun games for player " +
+				"\"" + s.Username + "\": " + err.Error())
+			s.Error("Something went wrong when getting your stats. Please contact an administrator.")
+			return
+		}
+
+		for {
+			variant := variants[variantName]
+			variantStats, err := models.UserStats.Get(s.UserID, variant.ID)
+			if err != nil {
+				logger.Error("Failed to pre-fetch variant stats for player \"" + s.Username +
+					"\" for variant " + strconv.Itoa(variant.ID) + ": " + err.Error())
+				s.Error("Something went wrong when getting your stats. Please contact an administrator.")
+				return
+			}
+
+			reloadedTable, tableExists := getTableAndLock(ctx, s, d.TableID, true, !d.NoTablesLock)
+			if !tableExists {
+				return
+			}
+			t = reloadedTable
+			tableLocked = true
+
+			if !validateTableJoinState(s, t) {
+				return
+			}
+			if t.Options.VariantName == variantName {
+				d.PregameStats = &PregameStats{NumGames: numGames, Variant: variantStats}
+				break
+			}
+
+			variantName = t.Options.VariantName
+			t.Unlock(ctx)
+			tableLocked = false
+		}
+	} else if !validateTableJoinPassword(s, d, t.PasswordHash) {
+		return
+	}
+
+	tableJoin(ctx, s, d, t)
+}
+
+func validateTableJoinState(s *Session, t *Table) bool {
 	// Validate that the player is not already joined to this table
 	playerIndex := t.GetPlayerIndexFromID(s.UserID)
 	if playerIndex != -1 {
 		s.Warning("You have already joined this table.")
-		return
+		return false
 	}
 
 	// Validate that this table does not already have the maximum number of players
 	if len(t.Players) >= t.MaxPlayers {
 		s.Warning("That table is already full.")
-		return
+		return false
 	}
 
 	// Validate that the game is not started yet
 	if t.Running {
 		s.Warning("That game has already started, so you cannot join it.")
-		return
+		return false
 	}
 
 	// Validate that it is not a replay
 	if t.Replay {
 		s.Warning("You can not join a replay.")
-		return
-	}
-
-	// Validate that they entered the correct password
-	if t.PasswordHash != "" && !d.BypassPassword {
-		if match, err := argon2id.ComparePasswordAndHash(d.Password, t.PasswordHash); err != nil {
-			logger.Error("Failed to compare the submitted password to the Argon2 hash: " +
-				err.Error())
-			s.Error(DefaultErrorMsg)
-			return
-		} else if !match {
-			s.Warning("That is not the correct password for this game.")
-			return
-		}
+		return false
 	}
 
 	// Validate that they have not been previously kicked from this game
 	if _, ok := t.KickedPlayers[s.UserID]; ok {
 		s.Warning("You cannot join a game that you have been kicked from.")
-		return
+		return false
 	}
 
-	// Pre-fetch the joining player's pregame stats here, BEFORE tableJoin acquires tables.Lock.
-	// At this point only t.Lock is held (acquired by getTableAndLock above; the brief tables RLock
-	// inside getTable was already released). Without this pre-fetch, tableJoin would issue these
-	// two DB queries while holding BOTH tables.Lock AND t.Lock simultaneously — the same
-	// lock-ordering footprint that triggered the deadlocks fixed in 11a3f29b and 52796122 for
-	// tableRestart/tableCreate.
-	//
-	// We skip when d.PregameStats is already populated by an internal caller (tableCreate /
-	// tableRestart), which pre-fetches even earlier under no locks at all and is the strongest
-	// guarantee. Holding only t.Lock during the DB roundtrip here is the next-best option for the
-	// user-initiated path: it confines pool-blocked goroutines to per-table contention instead of
-	// global tables-list contention.
-	if d.PregameStats == nil {
-		variant := variants[t.Options.VariantName]
-		var numGames int
-		if v, err := models.Games.GetUserNumGames(s.UserID, false); err != nil {
-			logger.Error("Failed to pre-fetch the number of non-speedrun games for player " +
-				"\"" + s.Username + "\": " + err.Error())
-			s.Error("Something went wrong when getting your stats. Please contact an administrator.")
-			return
-		} else {
-			numGames = v
-		}
-		var variantStats *UserStatsRow
-		if v, err := models.UserStats.Get(s.UserID, variant.ID); err != nil {
-			logger.Error("Failed to pre-fetch variant stats for player \"" + s.Username +
-				"\" for variant " + strconv.Itoa(variant.ID) + ": " + err.Error())
-			s.Error("Something went wrong when getting your stats. Please contact an administrator.")
-			return
-		} else {
-			variantStats = v
-		}
-		d.PregameStats = &PregameStats{NumGames: numGames, Variant: variantStats}
+	return true
+}
+
+func validateTableJoinPassword(s *Session, d *CommandData, passwordHash string) bool {
+	if passwordHash == "" || d.BypassPassword {
+		return true
 	}
 
-	tableJoin(ctx, s, d, t)
+	match, err := argon2id.ComparePasswordAndHash(d.Password, passwordHash)
+	if err != nil {
+		logger.Error("Failed to compare the submitted password to the Argon2 hash: " + err.Error())
+		s.Error(DefaultErrorMsg)
+		return false
+	}
+	if !match {
+		s.Warning("That is not the correct password for this game.")
+		return false
+	}
+
+	return true
 }
 
 func tableJoin(ctx context.Context, s *Session, d *CommandData, t *Table) {
@@ -130,50 +171,12 @@ func tableJoin(ctx context.Context, s *Session, d *CommandData, t *Table) {
 	logger.Info(t.GetName() + "User \"" + s.Username + "\" joined. " +
 		"(There are now " + strconv.Itoa(len(t.Players)+1) + " players.)")
 
-	// Get the player's pregame stats (total games played, variant-specific stats).
-	// When called from within lock-holding code (e.g. tableCreate, tableRestart), the caller
-	// pre-fetches these before acquiring any locks and passes them via d.PregameStats to avoid
-	// a deadlock where a DB query blocks while table mutexes are held.
-	var stats *PregameStats
-	if d.PregameStats != nil {
-		stats = d.PregameStats
-	} else {
-		// Legacy fallback path. After the deadlock-completion fix, every entry point pre-fetches
-		// PregameStats outside of tables.Lock + t.Lock scope (commandTableJoin for user-initiated
-		// joins; commandTableCreate / commandTableRestart for internal callers), so this branch
-		// should be dead code. Kept defensively so any future caller that forgets to pre-fetch
-		// still gets correct behavior — at the cost of holding tables.Lock + t.Lock during the DB
-		// roundtrip, which is the exact pattern that caused the original pool-exhaustion deadlock.
-		variant := variants[t.Options.VariantName]
-		var numGames int
-		if v, err := models.Games.GetUserNumGames(s.UserID, false); err != nil {
-			logger.Error("Failed to get the number of non-speedrun games for player " +
-				"\"" + s.Username + "\": " + err.Error())
-			s.Error("Something went wrong when getting your stats. Please contact an administrator.")
-			return
-		} else {
-			numGames = v
-		}
-
-		var variantStats *UserStatsRow
-		if v, err := models.UserStats.Get(s.UserID, variant.ID); err != nil {
-			logger.Error("Failed to get the stats for player \"" + s.Username + "\" for variant " +
-				strconv.Itoa(variant.ID) + ": " + err.Error())
-			s.Error("Something went wrong when getting your stats. Please contact an administrator.")
-			return
-		} else {
-			variantStats = v
-		}
-
-		stats = &PregameStats{NumGames: numGames, Variant: variantStats}
-	}
-
 	p := &Player{
 		UserID:     s.UserID,
 		Name:       s.Username,
 		Session:    s,
 		Present:    true,
-		Stats:      stats,
+		Stats:      d.PregameStats,
 		Typing:     false,
 		LastTyped:  time.Time{},
 		VoteToKill: false,
