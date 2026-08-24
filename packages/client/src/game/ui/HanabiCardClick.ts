@@ -189,6 +189,20 @@ function clickRight(card: HanabiCard, event: MouseEvent) {
     && globals.state.replay.shared === null
   ) {
     arrows.toggle(card.state.order);
+
+    // Also print the order of the card in the JavaScript log for debugging purposes. (This makes
+    // Ctrl + right-click an easy way to get the order of an arbitrary card.)
+    const suit =
+      card.state.suitIndex === null
+        ? undefined
+        : globals.variant.suits[card.state.suitIndex];
+    const rank = card.state.rank ?? undefined;
+    const suitText = suit?.name ?? "Unknown";
+    const rankText = rank?.toString() ?? "Unknown";
+    console.log(
+      `The order of the ${suitText} ${rankText} is: ${card.state.order}`,
+    );
+
     return;
   }
 
