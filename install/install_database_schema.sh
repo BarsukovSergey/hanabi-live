@@ -10,10 +10,19 @@ DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 source "$DIR/../.env"
 
 if [[ -z ${DB_HOST-} ]]; then
-  DB_HOST=localhost
+  DB_HOST="localhost"
 fi
 if [[ -z ${DB_PORT-} ]]; then
-  DB_PORT=5432
+  DB_PORT="5432"
+fi
+if [[ -z ${DB_USER-} ]]; then
+  DB_USER="hanabiuser"
+fi
+if [[ -z ${DB_PASSWORD-} ]]; then
+  DB_PASSWORD="1234567890"
+fi
+if [[ -z ${DB_NAME-} ]]; then
+  DB_NAME="hanabi"
 fi
 
 PGPASSWORD="$DB_PASSWORD" psql \
