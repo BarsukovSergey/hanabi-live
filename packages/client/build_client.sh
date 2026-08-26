@@ -34,25 +34,15 @@ bash "$DIR/set_version.sh"
 # If we need to, add the NPM directory to the path. (The Golang process will execute this script
 # during a graceful restart and it will not have it in the path by default.)
 if ! command -v npm > /dev/null; then
-  # MacOS only has Bash version 3, which does not have associative arrays,
-  # so the below check will not work
-  # https://unix.stackexchange.com/questions/92208/bash-how-to-get-the-first-number-that-occurs-in-a-variables-content
-  BASH_VERSION_FIRST_DIGIT=$(bash --version | grep -o -E '[0-9]+' | head -1 | sed -e 's/^0\+//')
-  if [[ $BASH_VERSION_FIRST_DIGIT -lt 4 ]]; then
-    echo "Failed to find the \"npm\" binary (on bash version $BASH_VERSION_FIRST_DIGIT)."
+  # Assume that Node Version Manager (fnm) is being used on this system.
+  # https://github.com/schniz/fnm
+  FNM_PATH="$HOME/.local/share/fnm/fnm"
+  if [[ ! -x "$FNM_PATH" ]]; then
+    echo "Failed to find the \"fnm\" binary (in the \"$FNM_PATH\" directory)."
     exit 1
   fi
 
-  # Assume that Node Version Manager (nvm) is being used on this system
-  # https://github.com/creationix/nvm
-  NODE_VERSION_DIRS=(/root/.nvm/versions/node/*)
-  NODE_VERSION_DIR="${NODE_VERSION_DIRS[-1]}"
-  if [[ ! -d $NODE_VERSION_DIR ]]; then
-    echo "Failed to find the \"npm\" binary (in the \"/root/.nvm/versions/node\" directory)."
-    exit 1
-  fi
-  NPM_BIN_DIR="$NODE_VERSION_DIR/bin"
-  export PATH=$NPM_BIN_DIR:$PATH
+  eval "$("$FNM_PATH" env --shell bash)"
 fi
 
 cd "$DIR"

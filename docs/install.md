@@ -170,13 +170,11 @@ These instructions assume you are on Ubuntu 20.04 LTS. Some adjustments may be n
   - `GRANT ALL PRIVILEGES ON DATABASE hanabi TO hanabiuser;`
   - `GRANT ALL ON SCHEMA public TO hanabiuser;`
   - `\q`
-- Install [nvm](https://github.com/nvm-sh/nvm) and [Node.js](https://nodejs.org/en/):
-  - `sudo apt install curl -y`
-  - `curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.35.3/install.sh | bash`
-  - `export NVM_DIR="$HOME/.nvm"`
-  - `[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"`
-  - `[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"`
-  - `nvm install node` <br />
+- Install [fnm](https://github.com/schniz/fnm) and [Node.js](https://nodejs.org/en/):
+  - `curl --silent --fail --show-error --location https://fnm.vercel.app/install | bash -s -- --skip-shell`
+  - `export PATH="$HOME/.local/share/fnm:$PATH"`
+  - `eval "$(fnm env --shell bash)"`
+  - `fnm install --lts` <br />
     (this installs the latest version)
 - Configure Git:
   - `git config --global user.name "Your_GitHub_Username"`
