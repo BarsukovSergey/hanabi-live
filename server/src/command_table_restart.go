@@ -51,27 +51,96 @@ func commandTableRestart(ctx context.Context, s *Session, d *CommandData) {
 	if !exists {
 		return
 	}
+	tableLocked := !d.NoTableLock
 	if !d.NoTableLock {
-		defer t.Unlock(ctx)
+		defer func() {
+			if tableLocked {
+				t.Unlock(ctx)
+			}
+		}()
 	}
 
+	for {
+		restartData, valid := validateAndSnapshotTableRestart(s, d, t)
+		if !valid {
+			return
+		}
+
+		if d.NoTableLock || d.NoTablesLock {
+			logger.Error("commandTableRestart was called without pre-fetched data while the caller held table locks.")
+			s.Error(DefaultErrorMsg)
+			return
+		}
+
+		t.Unlock(ctx)
+		tableLocked = false
+
+		precomputedSeed, creatorPregameStats, success := preFetchTableRestartData(s, restartData)
+		if !success {
+			return
+		}
+
+		reloadedTable, tableExists := getTableAndLock(ctx, s, d.TableID, true, !d.NoTablesLock)
+		if !tableExists {
+			return
+		}
+		t = reloadedTable
+		tableLocked = true
+
+		currentData, stillValid := validateAndSnapshotTableRestart(s, d, t)
+		if !stillValid {
+			return
+		}
+
+		if restartData.hasSameDatabaseInputs(currentData) {
+			tableRestart(
+				ctx,
+				s,
+				d,
+				t,
+				currentData.playerSessions,
+				currentData.spectatorSessions,
+				currentData.spectatorShadowingUserID,
+				precomputedSeed,
+				creatorPregameStats,
+			)
+			return
+		}
+
+	}
+}
+
+type tableRestartData struct {
+	playerSessions           []*Session
+	spectatorSessions        []*Session
+	spectatorShadowingUserID []int
+	players                  []*Player
+	variantName              string
+	precomputeSeed           bool
+}
+
+func validateAndSnapshotTableRestart(
+	s *Session,
+	d *CommandData,
+	t *Table,
+) (*tableRestartData, bool) {
 	// Validate that this is a shared replay
 	if !t.Replay || !t.Visible {
 		s.Warning("Table " + strconv.FormatUint(t.ID, 10) + " is not a shared replay, " +
 			"so you cannot send a restart action.")
-		return
+		return nil, false
 	}
 
 	// Validate that this person is spectating the shared replay
 	if !t.IsActivelySpectating(s.UserID) {
 		s.Warning("You are not in shared replay " + strconv.FormatUint(t.ID, 10) + ".")
-		return
+		return nil, false
 	}
 
 	// Validate that this person is leading the shared replay
 	if s.UserID != t.OwnerID {
 		s.Warning("You cannot restart a game unless you are the leader.")
-		return
+		return nil, false
 	}
 
 	// Validate that this person was one of the players in the game
@@ -84,13 +153,13 @@ func commandTableRestart(ctx context.Context, s *Session, d *CommandData) {
 	}
 	if !leaderPlayedInOriginalGame {
 		s.Warning("You cannot restart a game unless you played in it.")
-		return
+		return nil, false
 	}
 
 	// Validate that there are at least two people in the shared replay
 	if len(t.ActiveSpectators()) < 2 {
 		s.Warning("You cannot restart a game unless there are at least two people in it.")
-		return
+		return nil, false
 	}
 
 	// Validate that all of the players who played the game are currently spectating
@@ -104,7 +173,7 @@ func commandTableRestart(ctx context.Context, s *Session, d *CommandData) {
 			// Assume that someone is in the process of reconnecting
 			s.Warning("One of the spectators is currently reconnecting. " +
 				"Please try restarting again in a few seconds.")
-			return
+			return nil, false
 		}
 		playedInOriginalGame := false
 		for _, p := range t.Players {
@@ -127,44 +196,68 @@ func commandTableRestart(ctx context.Context, s *Session, d *CommandData) {
 	if len(playerSessions) != len(t.Players) && d.HidePregame {
 		s.Warning("Not all of the players from the original game are in the shared replay, " +
 			"so you cannot restart the game.")
-		return
+		return nil, false
 	}
 
 	// Validate that this is not a game with a custom !replay prefix
 	if strings.HasPrefix(t.InitialName, "!replay") {
 		s.Warning("You are not allowed to restart \"!replay\" games.")
-		return
+		return nil, false
 	}
 
 	// Validate that the server is not about to go offline
 	if checkImminentShutdown(s) {
-		return
+		return nil, false
 	}
 
 	// Validate that the server is not undergoing maintenance
 	if maintenanceMode.IsSet() {
 		s.Warning("The server is undergoing maintenance. " +
 			"You cannot start any new games for the time being.")
-		return
+		return nil, false
 	}
 
-	// All DB queries must be done here, while holding only t.Lock, BEFORE tableRestart acquires
-	// tables.Lock. Once tableRestart holds tables.Lock + t.Lock + t2.Lock simultaneously, any
-	// DB query that blocks on pool exhaustion will deadlock the server (other goroutines hold
-	// pool connections while waiting for the locks we hold).
+	players := make([]*Player, len(t.Players))
+	copy(players, t.Players)
 
-	// Pre-compute the seed for the new game (only for normal games; "!seed" games derive their
-	// seed from the table name via SetSeedSuffix and never call getNextAvailableSeed).
+	return &tableRestartData{
+		playerSessions:           playerSessions,
+		spectatorSessions:        spectatorSessions,
+		spectatorShadowingUserID: spectatorShadowingUserID,
+		players:                  players,
+		variantName:              t.Options.VariantName,
+		precomputeSeed:           d.HidePregame && !strings.HasPrefix(t.InitialName, "!seed"),
+	}, true
+}
+
+func (d *tableRestartData) hasSameDatabaseInputs(other *tableRestartData) bool {
+	if d.variantName != other.variantName ||
+		d.precomputeSeed != other.precomputeSeed ||
+		len(d.players) != len(other.players) {
+		return false
+	}
+	for i, player := range d.players {
+		if player.UserID != other.players[i].UserID {
+			return false
+		}
+	}
+	return true
+}
+
+func preFetchTableRestartData(
+	s *Session,
+	restartData *tableRestartData,
+) (string, *PregameStats, bool) {
 	var precomputedSeed string
-	if d.HidePregame && !strings.HasPrefix(t.InitialName, "!seed") {
-		variant := variants[t.Options.VariantName]
-		seedPrefix := "p" + strconv.Itoa(len(t.Players)) +
+	if restartData.precomputeSeed {
+		variant := variants[restartData.variantName]
+		seedPrefix := "p" + strconv.Itoa(len(restartData.players)) +
 			"v" + strconv.Itoa(variant.ID) +
 			"s"
-		if seed, err := getNextAvailableSeed(t.Players, seedPrefix); err != nil {
+		if seed, err := getNextAvailableSeed(restartData.players, seedPrefix); err != nil {
 			logger.Error("Failed to pre-compute seed for table restart: " + err.Error())
 			s.Error(StartGameFail)
-			return
+			return "", nil, false
 		} else {
 			precomputedSeed = seed
 		}
@@ -172,12 +265,12 @@ func commandTableRestart(ctx context.Context, s *Session, d *CommandData) {
 
 	// Pre-fetch the creator's pregame stats for when they join the new table via
 	// commandTableCreate → tableCreate → commandTableJoin → tableJoin.
-	variant := variants[t.Options.VariantName]
+	variant := variants[restartData.variantName]
 	var creatorNumGames int
 	if v, err := models.Games.GetUserNumGames(s.UserID, false); err != nil {
 		logger.Error("Failed to pre-fetch game count for \"" + s.Username + "\": " + err.Error())
 		s.Error(StartGameFail)
-		return
+		return "", nil, false
 	} else {
 		creatorNumGames = v
 	}
@@ -185,13 +278,13 @@ func commandTableRestart(ctx context.Context, s *Session, d *CommandData) {
 	if v, err := models.UserStats.Get(s.UserID, variant.ID); err != nil {
 		logger.Error("Failed to pre-fetch variant stats for \"" + s.Username + "\": " + err.Error())
 		s.Error(StartGameFail)
-		return
+		return "", nil, false
 	} else {
 		creatorVariantStats = v
 	}
 	creatorPregameStats := &PregameStats{NumGames: creatorNumGames, Variant: creatorVariantStats}
 
-	tableRestart(ctx, s, d, t, playerSessions, spectatorSessions, spectatorShadowingUserID, precomputedSeed, creatorPregameStats)
+	return precomputedSeed, creatorPregameStats, true
 }
 
 func tableRestart(

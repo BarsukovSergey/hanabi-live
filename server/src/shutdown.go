@@ -20,11 +20,6 @@ func shutdown(ctx context.Context) {
 	shuttingDown.Set()
 	datetimeShutdownInit = time.Now()
 
-	// Since this is a function that changes a user's relationship to tables,
-	// we must acquires the tables lock to prevent race conditions
-	tables.Lock(ctx)
-	defer tables.Unlock(ctx)
-
 	numGames := countActiveTables(ctx)
 	logger.Info("Initiating a graceful server shutdown (with " + strconv.Itoa(numGames) +
 		" active games).")
@@ -49,11 +44,6 @@ func shutdownXMinutesLeft(ctx context.Context, minutesLeft int) {
 		return
 	}
 
-	// Since this is a function that changes a user's relationship to tables,
-	// we must acquires the tables lock to prevent race conditions
-	tables.Lock(ctx)
-	defer tables.Unlock(ctx)
-
 	if minutesLeft == 5 {
 		// Automatically end all unstarted tables,
 		// since they will almost certainly not have time to finish
@@ -65,7 +55,7 @@ func shutdownXMinutesLeft(ctx context.Context, minutesLeft int) {
 	chatServerSend(ctx, msg, "lobby", false)
 
 	// Send a warning message to the people still playing
-	tableList := tables.GetList(false)
+	tableList := tables.GetList(true)
 	roomNames := make([]string, 0)
 	for _, t := range tableList {
 		t.Lock(ctx)
@@ -80,16 +70,14 @@ func shutdownXMinutesLeft(ctx context.Context, minutesLeft int) {
 }
 
 func terminateAllUnstartedTables(ctx context.Context) {
-	// It is assumed that the tables mutex is locked when calling this function
-	for _, t := range tables.GetList(false) {
+	for _, t := range tables.GetList(true) {
 		t.Lock(ctx)
 		if !t.Running {
 			s := t.GetOwnerSession()
-			commandTableLeave(ctx, s, &CommandData{ // nolint: exhaustivestruct
-				TableID:      t.ID,
-				NoTableLock:  true,
-				NoTablesLock: true,
-			})
+			tableID := t.ID
+			t.Unlock(ctx)
+			commandTableLeave(ctx, s, &CommandData{TableID: tableID}) // nolint: exhaustivestruct
+			continue
 		}
 		t.Unlock(ctx)
 	}
@@ -113,17 +101,19 @@ func shutdownWaitSub(ctx context.Context) bool {
 		return true
 	}
 
-	// Since this is a function that changes a user's relationship to tables,
-	// we must acquires the tables lock to prevent race conditions
-	tables.Lock(ctx)
-	defer tables.Unlock(ctx)
-
 	numActiveTables := countActiveTables(ctx)
 
 	if numActiveTables == 0 {
 		// Wait 10 seconds so that the players are not immediately booted upon finishing
 		time.Sleep(time.Second * 10)
 
+		if shuttingDown.IsNotSet() {
+			logger.Info("The shutdown was aborted.")
+			return true
+		}
+		if countActiveTables(ctx) != 0 {
+			return false
+		}
 		logger.Info("There are 0 active tables left.")
 		shutdownImmediate(ctx)
 		return true
@@ -139,31 +129,30 @@ func shutdownWaitSub(ctx context.Context) bool {
 }
 
 func terminateAllStartedTables(ctx context.Context) {
-	// It is assumed that the tables mutex is locked when calling this function
-	for _, t := range tables.GetList(false) {
+	for _, t := range tables.GetList(true) {
 		t.Lock(ctx)
-		if t.Running && !t.Replay {
+		if t.Running && !t.Replay && !t.Ending {
 			s := t.GetOwnerSession()
+			tableID := t.ID
+			t.Unlock(ctx)
 			commandAction(ctx, s, &CommandData{ // nolint: exhaustivestruct
-				TableID:      t.ID,
-				Type:         ActionTypeEndGame,
-				Target:       -1,
-				Value:        EndConditionTerminatedByPlayer,
-				NoTableLock:  true,
-				NoTablesLock: true,
+				TableID: tableID,
+				Type:    ActionTypeEndGame,
+				Target:  -1,
+				Value:   EndConditionTerminatedByPlayer,
 			})
+			continue
 		}
 		t.Unlock(ctx)
 	}
 }
 
 func countActiveTables(ctx context.Context) int {
-	// It is assumed that the tables mutex is locked when calling this function
-	tableList := tables.GetList(false)
+	tableList := tables.GetList(true)
 	numTables := 0
 	for _, t := range tableList {
 		t.Lock(ctx)
-		if t.Running && !t.Replay {
+		if t.Running && !t.Replay && !t.EndingFailed {
 			numTables++
 		}
 		t.Unlock(ctx)
@@ -173,7 +162,6 @@ func countActiveTables(ctx context.Context) int {
 }
 
 func shutdownImmediate(ctx context.Context) {
-	// It is assumed that the tables mutex is locked when calling this function
 	logger.Info("Initiating an immediate server shutdown.")
 
 	waitForAllWebSocketCommandsToFinish()

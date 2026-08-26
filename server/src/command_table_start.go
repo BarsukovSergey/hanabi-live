@@ -28,22 +28,71 @@ func commandTableStart(ctx context.Context, s *Session, d *CommandData) {
 		defer t.Unlock(ctx)
 	}
 
+	if !validateTableStart(s, d, t) {
+		return
+	}
+
+	precomputedSeed := ""
+	if t.ExtraOptions.CustomSeed == "" &&
+		t.ExtraOptions.SetSeedSuffix == "" &&
+		t.ExtraOptions.PrecomputedSeed == "" &&
+		!t.ExtraOptions.JSONReplay {
+		if d.NoTablesLock {
+			logger.Error("commandTableStart was called without a pre-computed seed while the caller held tables.Lock.")
+			s.Error(StartGameFail)
+			return
+		}
+		for {
+			variantName := t.Options.VariantName
+			players := make([]*Player, len(t.Players))
+			copy(players, t.Players)
+			seedPrefix := "p" + strconv.Itoa(len(players)) +
+				"v" + strconv.Itoa(variants[variantName].ID) +
+				"s"
+
+			t.Unlock(ctx)
+			seed, err := getNextAvailableSeed(players, seedPrefix)
+			t.Lock(ctx)
+			if err != nil {
+				logger.Error("Failed to compute next seed at table " +
+					strconv.Itoa(int(s.TableID())) + ": " + err.Error())
+				s.Error(StartGameFail)
+				return
+			}
+			if !validateTableStart(s, d, t) {
+				return
+			}
+			if variantName == t.Options.VariantName && sameTablePlayers(players, t.Players) {
+				precomputedSeed = seed
+				break
+			}
+		}
+	}
+
+	tableStart(ctx, s, d, t, precomputedSeed)
+}
+
+func validateTableStart(s *Session, d *CommandData, t *Table) bool {
+	if t.Deleted {
+		return false
+	}
+
 	// Validate that this is the owner of the table
 	if s.UserID != t.OwnerID {
 		s.Warning("Only the owner of a table can start the game.")
-		return
+		return false
 	}
 
 	// Validate that the table has at least 2 players
 	if len(t.Players) < 2 {
 		s.Warning("You need at least 2 players before you can start a game.")
-		return
+		return false
 	}
 
 	// Validate that the game is not started yet
 	if t.Running {
 		s.Warning("The game has already started, so you cannot start it.")
-		return
+		return false
 	}
 
 	// Validate that the right amount of players is in the game
@@ -54,7 +103,7 @@ func commandTableStart(ctx context.Context, s *Session, d *CommandData) {
 			s.Warning("You currently have " + strconv.Itoa(len(t.Players)) +
 				" players, but this game needs " + strconv.Itoa(t.ExtraOptions.CustomNumPlayers) +
 				" players.")
-			return
+			return false
 		}
 
 		// Validate that everyone is present
@@ -63,7 +112,7 @@ func commandTableStart(ctx context.Context, s *Session, d *CommandData) {
 		for _, p := range t.Players {
 			if !p.Present {
 				s.Warning("Everyone must be present before you can start this game.")
-				return
+				return false
 			}
 		}
 	}
@@ -74,7 +123,7 @@ func commandTableStart(ctx context.Context, s *Session, d *CommandData) {
 		// If not, fail silently and allow the user to notice that the button they pressed has
 		// become disabled
 		if len(*d.IntendedPlayers) != len(t.Players) {
-			return
+			return false
 		}
 		for _, p := range t.Players {
 			found := false
@@ -85,15 +134,27 @@ func commandTableStart(ctx context.Context, s *Session, d *CommandData) {
 				}
 			}
 			if !found {
-				return
+				return false
 			}
 		}
 	}
 
-	tableStart(ctx, s, d, t)
+	return true
 }
 
-func tableStart(ctx context.Context, s *Session, d *CommandData, t *Table) {
+func sameTablePlayers(first []*Player, second []*Player) bool {
+	if len(first) != len(second) {
+		return false
+	}
+	for i, player := range first {
+		if player.UserID != second[i].UserID {
+			return false
+		}
+	}
+	return true
+}
+
+func tableStart(ctx context.Context, s *Session, d *CommandData, t *Table, precomputedSeed string) {
 	// Local variables
 	variant := variants[t.Options.VariantName]
 
@@ -145,25 +206,16 @@ func tableStart(ctx context.Context, s *Session, d *CommandData, t *Table) {
 		// This is a custom table created with the "!seed" prefix
 		// (e.g. playing a deal with a specific seed)
 		g.Seed = seedPrefix + t.ExtraOptions.SetSeedSuffix
+	} else if precomputedSeed != "" {
+		g.Seed = precomputedSeed
 	} else if t.ExtraOptions.PrecomputedSeed != "" {
 		// The seed was pre-computed outside of any table mutex scope (during table restart) to
 		// avoid a deadlock caused by making a DB query while holding table/tables locks.
 		g.Seed = t.ExtraOptions.PrecomputedSeed
 	} else {
-		// getNextAvailableSeed issues a DB query (GetBlockedSeeds).  Holding t.Lock during that
-		// call can exhaust the pgxpool and deadlock the server.  Copy the player list, drop the
-		// lock for the duration of the DB roundtrip, then reacquire before continuing.
-		playersCopy := make([]*Player, len(t.Players))
-		copy(playersCopy, t.Players)
-		t.Unlock(ctx)
-		val, err := getNextAvailableSeed(playersCopy, seedPrefix)
-		t.Lock(ctx)
-		if err != nil {
-			logger.Error("Failed to compute next seed at table " + strconv.Itoa(int(s.TableID())) + ": " + err.Error())
-			s.Error(StartGameFail)
-			return
-		}
-		g.Seed = val
+		logger.Error("tableStart was called without a pre-computed seed.")
+		s.Error(StartGameFail)
+		return
 	}
 	logger.Info(t.GetName() + "Using seed: " + g.Seed)
 	logger.Info("Shuffling deck: " + strconv.FormatBool(shuffleDeck))

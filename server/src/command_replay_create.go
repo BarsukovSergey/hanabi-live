@@ -9,9 +9,9 @@ import (
 	"github.com/Hanabi-Live/hanabi-live/logger"
 )
 
-// PreFetchedReplayData holds every database row that replayCreate needs for a "source: id"
-// replay.  All fields are fetched in commandReplayCreate — before replayCreate acquires
-// tables.Lock or t.Lock — so that no DB calls are made while either mutex is held.
+// PreFetchedReplayData holds database rows fetched before replay or !replay table creation
+// acquires tables.Lock or t.Lock. Standard replays populate every field; !replay tables only
+// need the table options, players, seed, and actions.
 type PreFetchedReplayData struct {
 	Options          *Options
 	Players          []*DBPlayer
@@ -30,12 +30,13 @@ type PreFetchedReplayData struct {
 // we need to play through a mock game using these actions
 //
 // Example data:
-// {
-//   source: 'id',
-//   databaseID: 15103, // Only if source is "id"
-//   json: '{"actions"=[],"deck"=[]}', // Only if source is "json"
-//   visibility: 'solo', // Can also be "shared"
-// }
+//
+//	{
+//	  source: 'id',
+//	  databaseID: 15103, // Only if source is "id"
+//	  json: '{"actions"=[],"deck"=[]}', // Only if source is "json"
+//	  visibility: 'solo', // Can also be "shared"
+//	}
 func commandReplayCreate(ctx context.Context, s *Session, d *CommandData) {
 	// Validate that there is not a password
 	if d.Password != "" {
@@ -195,24 +196,14 @@ func replayCreate(ctx context.Context, s *Session, d *CommandData) {
 	t.Progress = 0
 
 	if d.Source == "id" {
-		// Fill in the DatetimeStarted and DatetimeFinished values from the database.
-		// Use pre-fetched values when available (normal path via commandReplayCreate) to
-		// avoid a DB call while holding tables.Lock + t.Lock, which can exhaust the pgxpool.
-		if d.PreFetchedReplay != nil {
-			g.DatetimeStarted = d.PreFetchedReplay.DatetimeStarted
-			g.DatetimeFinished = d.PreFetchedReplay.DatetimeFinished
-		} else {
-			if v1, v2, err := models.Games.GetDatetimes(t.ExtraOptions.DatabaseID); err != nil {
-				logger.Error("Failed to get the datetimes for game " +
-					"\"" + strconv.Itoa(t.ExtraOptions.DatabaseID) + "\": " + err.Error())
-				s.Error(InitGameFail)
-				deleteTable(t)
-				return
-			} else {
-				g.DatetimeStarted = v1
-				g.DatetimeFinished = v2
-			}
+		if d.PreFetchedReplay == nil {
+			logger.Error("replayCreate was called without pre-fetched replay data.")
+			s.Error(InitGameFail)
+			deleteTable(t)
+			return
 		}
+		g.DatetimeStarted = d.PreFetchedReplay.DatetimeStarted
+		g.DatetimeFinished = d.PreFetchedReplay.DatetimeFinished
 	}
 
 	// Join the user to the new replay
@@ -398,40 +389,18 @@ func isJSONValid(d *CommandData) (bool, string) {
 }
 
 // loadDatabaseOptionsToTable populates t.Options and t.ExtraOptions from the database for a
-// "source: id" replay.  When d.PreFetchedReplay is set (normal path via commandReplayCreate),
-// every DB call is skipped and the pre-fetched rows are used directly so that this function
-// can be called safely while tables.Lock + t.Lock are held.
+// "source: id" replay using data fetched before any table mutex is acquired.
 func loadDatabaseOptionsToTable(s *Session, d *CommandData, t *Table) ([]*DBPlayer, bool) {
 	databaseID := d.DatabaseID
 	pf := d.PreFetchedReplay
-
-	// Get the options
-	if pf != nil {
-		t.Options = pf.Options
-	} else {
-		if v, err := models.Games.GetOptions(databaseID); err != nil {
-			logger.Error("Failed to get the options from the database for game " +
-				strconv.Itoa(databaseID) + ": " + err.Error())
-			s.Error(InitGameFail)
-			return nil, false
-		} else {
-			t.Options = v
-		}
+	if pf == nil {
+		logger.Error("loadDatabaseOptionsToTable was called without pre-fetched replay data.")
+		s.Error(InitGameFail)
+		return nil, false
 	}
 
-	// Get the players
-	var dbPlayers []*DBPlayer
-	if pf != nil {
-		dbPlayers = pf.Players
-	} else {
-		if v, err := models.Games.GetPlayers(databaseID); err != nil {
-			logger.Error("Failed to get the players from the database for game " +
-				strconv.Itoa(databaseID) + ": " + err.Error())
-			return nil, false
-		} else {
-			dbPlayers = v
-		}
-	}
+	t.Options = pf.Options
+	dbPlayers := pf.Players
 
 	// As a sanity check, ensure that the number of game participants in the database matches the
 	// number of players that are supposed to be in the game (according to the options)
@@ -448,36 +417,6 @@ func loadDatabaseOptionsToTable(s *Session, d *CommandData, t *Table) ([]*DBPlay
 		characterAssignments = getCharacterAssignmentsFromDBPlayers(dbPlayers)
 	}
 
-	// Get the seed
-	var seed string
-	if pf != nil {
-		seed = pf.Seed
-	} else {
-		if v, err := models.Games.GetSeed(databaseID); err != nil {
-			logger.Error("Failed to get the seed from the database for game " +
-				strconv.Itoa(databaseID) + ": " + err.Error())
-			s.Error(InitGameFail)
-			return nil, false
-		} else {
-			seed = v
-		}
-	}
-
-	// Get the actions
-	var actions []*GameAction
-	if pf != nil {
-		actions = pf.Actions
-	} else {
-		if v, err := models.GameActions.GetAll(databaseID); err != nil {
-			logger.Error("Failed to get the actions from the database for game " +
-				strconv.Itoa(databaseID) + ": " + err.Error())
-			s.Error(InitGameFail)
-			return nil, false
-		} else {
-			actions = v
-		}
-	}
-
 	t.ExtraOptions = &ExtraOptions{
 		DatabaseID: databaseID,
 
@@ -486,11 +425,11 @@ func loadDatabaseOptionsToTable(s *Session, d *CommandData, t *Table) ([]*DBPlay
 
 		CustomNumPlayers:           len(dbPlayers),
 		CustomCharacterAssignments: characterAssignments,
-		CustomSeed:                 seed,
+		CustomSeed:                 pf.Seed,
 		// Setting "CustomDeck" is not necessary because the deck is not stored in the database;
 		// the ordering of the cards is determined by using the game's seed
 		CustomDeck:    nil,
-		CustomActions: actions,
+		CustomActions: pf.Actions,
 
 		Restarted:     false,
 		SetSeedSuffix: "",
@@ -646,41 +585,14 @@ func loadFakePlayers(t *Table, playerNames []string) {
 func preFetchReplayData(s *Session, d *CommandData) bool {
 	dbID := d.DatabaseID
 
-	opts, err := models.Games.GetOptions(dbID)
-	if err != nil {
-		logger.Error("Failed to get the options for game " + strconv.Itoa(dbID) +
-			" when pre-fetching replay data: " + err.Error())
-		s.Error(InitGameFail)
+	prefetched, success := preFetchReplayTableData(s, dbID)
+	if !success {
 		return false
 	}
 
-	players, err := models.Games.GetPlayers(dbID)
-	if err != nil {
-		logger.Error("Failed to get the players for game " + strconv.Itoa(dbID) +
-			" when pre-fetching replay data: " + err.Error())
-		s.Error(InitGameFail)
-		return false
-	}
-
-	seed, err := models.Games.GetSeed(dbID)
-	if err != nil {
-		logger.Error("Failed to get the seed for game " + strconv.Itoa(dbID) +
-			" when pre-fetching replay data: " + err.Error())
-		s.Error(InitGameFail)
-		return false
-	}
-
-	actions, err := models.GameActions.GetAll(dbID)
-	if err != nil {
-		logger.Error("Failed to get the actions for game " + strconv.Itoa(dbID) +
-			" when pre-fetching replay data: " + err.Error())
-		s.Error(InitGameFail)
-		return false
-	}
-
-	variant := variants[opts.VariantName]
+	variant := variants[prefetched.Options.VariantName]
 	noteSize := variant.GetDeckSize() + len(variant.Suits)
-	notes, err := models.Games.GetNotes(dbID, opts.NumPlayers, noteSize)
+	notes, err := models.Games.GetNotes(dbID, prefetched.Options.NumPlayers, noteSize)
 	if err != nil {
 		logger.Error("Failed to get the notes for game " + strconv.Itoa(dbID) +
 			" when pre-fetching replay data: " + err.Error())
@@ -696,38 +608,63 @@ func preFetchReplayData(s *Session, d *CommandData) bool {
 		return false
 	}
 
-	d.PreFetchedReplay = &PreFetchedReplayData{
-		Options:          opts,
-		Players:          players,
-		Seed:             seed,
-		Actions:          actions,
-		Notes:            notes,
-		DatetimeStarted:  dtStart,
-		DatetimeFinished: dtFinish,
-	}
+	prefetched.Notes = notes
+	prefetched.DatetimeStarted = dtStart
+	prefetched.DatetimeFinished = dtFinish
+	d.PreFetchedReplay = prefetched
 	return true
+}
+
+func preFetchReplayTableData(s *Session, dbID int) (*PreFetchedReplayData, bool) {
+	opts, err := models.Games.GetOptions(dbID)
+	if err != nil {
+		logger.Error("Failed to get the options for game " + strconv.Itoa(dbID) +
+			" when pre-fetching replay data: " + err.Error())
+		s.Error(InitGameFail)
+		return nil, false
+	}
+
+	players, err := models.Games.GetPlayers(dbID)
+	if err != nil {
+		logger.Error("Failed to get the players for game " + strconv.Itoa(dbID) +
+			" when pre-fetching replay data: " + err.Error())
+		s.Error(InitGameFail)
+		return nil, false
+	}
+
+	seed, err := models.Games.GetSeed(dbID)
+	if err != nil {
+		logger.Error("Failed to get the seed for game " + strconv.Itoa(dbID) +
+			" when pre-fetching replay data: " + err.Error())
+		s.Error(InitGameFail)
+		return nil, false
+	}
+
+	actions, err := models.GameActions.GetAll(dbID)
+	if err != nil {
+		logger.Error("Failed to get the actions for game " + strconv.Itoa(dbID) +
+			" when pre-fetching replay data: " + err.Error())
+		s.Error(InitGameFail)
+		return nil, false
+	}
+
+	return &PreFetchedReplayData{
+		Options: opts,
+		Players: players,
+		Seed:    seed,
+		Actions: actions,
+	}, true
 }
 
 func applyNotesToPlayers(s *Session, d *CommandData, g *Game) bool {
 	var notes [][]string
 	if d.Source == "id" {
-		if d.PreFetchedReplay != nil {
-			// Use the notes that were pre-fetched in commandReplayCreate before any locks
-			// were acquired, to avoid a DB call under the tables lock + table lock.
-			notes = d.PreFetchedReplay.Notes
-		} else {
-			// Fallback path (e.g. internal callers that bypass commandReplayCreate).
-			variant := variants[g.Options.VariantName]
-			noteSize := variant.GetDeckSize() + len(variant.Suits)
-			if v, err := models.Games.GetNotes(d.DatabaseID, len(g.Players), noteSize); err != nil {
-				logger.Error("Failed to get the notes from the database for game " +
-					strconv.Itoa(d.DatabaseID) + ": " + err.Error())
-				s.Error(InitGameFail)
-				return false
-			} else {
-				notes = v
-			}
+		if d.PreFetchedReplay == nil {
+			logger.Error("applyNotesToPlayers was called without pre-fetched replay data.")
+			s.Error(InitGameFail)
+			return false
 		}
+		notes = d.PreFetchedReplay.Notes
 	} else if d.Source == "json" {
 		notes = d.GameJSON.Notes
 	}

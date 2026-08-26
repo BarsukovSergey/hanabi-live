@@ -17,16 +17,16 @@ func chatSplit(ctx context.Context, s *Session, d *CommandData, t *Table, cmd st
 }
 
 func commandTableSplit(ctx context.Context, s *Session, d *CommandData, tableID uint64) {
-	// Acquire the tables lock first so that we can safely create a new table while holding
-	// the source table lock.
-	tables.Lock(ctx)
-	defer tables.Unlock(ctx)
-
-	t, exists := getTableAndLock(ctx, s, tableID, true, false)
+	t, exists := getTableAndLock(ctx, s, tableID, true, true)
 	if !exists {
 		return
 	}
 	defer t.Unlock(ctx)
+
+	// Table commands consistently acquire the per-table lock before the global tables lock.
+	// Reversing that order here can deadlock with a concurrent join, leave, or spectate command.
+	tables.Lock(ctx)
+	defer tables.Unlock(ctx)
 
 	if t.Running {
 		chatServerSend(ctx, NotStartedFail, d.Room, true)
@@ -135,7 +135,7 @@ func commandTableSplit(ctx context.Context, s *Session, d *CommandData, tableID 
 
 	msg := s.Username + " split " + strings.Join(selectedNames, ", ") + " into a new lobby."
 	chatServerSend(ctx, msg, t.GetRoomName(), true)
-	chatServerSend(ctx, "This lobby was created by splitting " + t.Name + ".", newTable.GetRoomName(), true)
+	chatServerSend(ctx, "This lobby was created by splitting "+t.Name+".", newTable.GetRoomName(), true)
 
 	logger.Info(t.GetName() + "User \"" + s.Username + "\" split players into a new lobby named \"" +
 		newTableName + "\".")

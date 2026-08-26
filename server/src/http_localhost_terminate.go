@@ -18,11 +18,6 @@ func httpLocalhostTerminate(c *gin.Context) {
 		return
 	}
 
-	// Since this is a function that changes a user's relationship to tables,
-	// we must acquires the tables lock to prevent race conditions
-	tables.Lock(c)
-	defer tables.Unlock(c)
-
 	searchingByName := false
 	var tableID uint64
 	if v, err := strconv.ParseUint(tableNameOrID, 10, 64); err != nil {
@@ -42,21 +37,21 @@ func httpLocalhostTerminate(c *gin.Context) {
 	}
 
 	// Get the corresponding table
-	t, exists := getTableAndLock(c, nil, tableID, true, false)
+	t, exists := getTableAndLock(c, nil, tableID, true, true)
 	if !exists {
 		msg := "Table \"" + strconv.FormatUint(tableID, 10) + "\" does not exist.\n"
 		c.String(http.StatusOK, msg)
 		return
 	}
+	defer t.Unlock(c)
 
 	// Terminate it
 	s := t.GetOwnerSession()
 	commandAction(c, s, &CommandData{ // nolint: exhaustivestruct
-		TableID:      t.ID,
-		Type:         ActionTypeEndGame,
-		Target:       -1,
-		Value:        EndConditionTerminatedByPlayer,
-		NoTableLock:  true,
-		NoTablesLock: true,
+		TableID:     t.ID,
+		Type:        ActionTypeEndGame,
+		Target:      -1,
+		Value:       EndConditionTerminatedByPlayer,
+		NoTableLock: true,
 	})
 }

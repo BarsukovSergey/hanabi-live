@@ -102,7 +102,13 @@ func commandTableJoin(ctx context.Context, s *Session, d *CommandData) {
 		return
 	}
 
-	tableJoin(ctx, s, d, t)
+	autoStartSession := tableJoin(ctx, s, d, t)
+	if autoStartSession != nil {
+		tableID := t.ID
+		t.Unlock(ctx)
+		tableLocked = false
+		commandTableStart(ctx, autoStartSession, &CommandData{TableID: tableID}) // nolint: exhaustivestruct
+	}
 }
 
 func validateTableJoinState(s *Session, t *Table) bool {
@@ -159,7 +165,7 @@ func validateTableJoinPassword(s *Session, d *CommandData, passwordHash string) 
 	return true
 }
 
-func tableJoin(ctx context.Context, s *Session, d *CommandData, t *Table) {
+func tableJoin(ctx context.Context, s *Session, d *CommandData, t *Table) *Session {
 	// Since this is a function that changes a user's relationship to tables,
 	// we must acquires the tables lock to prevent race conditions
 	if !d.NoTablesLock {
@@ -174,7 +180,7 @@ func tableJoin(ctx context.Context, s *Session, d *CommandData, t *Table) {
 		if len(tables.GetTablesUserPlaying(s.UserID)) > 0 {
 			s.Warning("You cannot join more than one table at a time. " +
 				"Terminate your other game before joining a new one.")
-			return
+			return nil
 		}
 	}
 
@@ -248,20 +254,19 @@ func tableJoin(ctx context.Context, s *Session, d *CommandData, t *Table) {
 				if !p2.Present {
 					msg := "Aborting automatic game start since the table creator is away."
 					chatServerSend(ctx, msg, t.GetRoomName(), true)
-					return
+					return nil
 				}
 
-				commandTableStart(ctx, p2.Session, &CommandData{ // nolint: exhaustivestruct
-					TableID:      t.ID,
-					NoTableLock:  true,
-					NoTablesLock: true,
-				})
-				return
+				if d.NoTableLock || d.NoTablesLock {
+					logger.Error("Automatic table start was requested from a lock-owning internal tableJoin call.")
+					return nil
+				}
+				return p2.Session
 			}
 		}
 
 		logger.Error("Failed to find the owner of the game when attempting to automatically start it.")
-		return
+		return nil
 	}
 
 	// Update the "DatetimeLastJoined" field, but make a copy first
@@ -277,4 +282,6 @@ func tableJoin(ctx context.Context, s *Session, d *CommandData, t *Table) {
 			}
 		}
 	}
+
+	return nil
 }

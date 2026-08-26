@@ -37,14 +37,15 @@ type SpecialGameData struct {
 // commandTableCreate is sent when the user submits the "Create a New Game" form
 //
 // Example data:
-// {
-//   name: 'my new table',
-//   options: {
-//     variant: 'No Variant',
-//     [other options omitted; see "Options.ts"]
-//   },
-//   password: 'super_secret',
-// }
+//
+//	{
+//	  name: 'my new table',
+//	  options: {
+//	    variant: 'No Variant',
+//	    [other options omitted; see "Options.ts"]
+//	  },
+//	  password: 'super_secret',
+//	}
 func commandTableCreate(ctx context.Context, s *Session, d *CommandData) {
 	// Validate that the server is not about to go offline
 	if checkImminentShutdown(s) {
@@ -95,6 +96,14 @@ func commandTableCreate(ctx context.Context, s *Session, d *CommandData) {
 		}
 	}
 
+	if data.SetReplay {
+		if v, success := preFetchReplayTableData(s, data.DatabaseID); !success {
+			return
+		} else {
+			d.PreFetchedReplay = v
+		}
+	}
+
 	// Validate that the maximum player count is valid, default to 5
 	if d.MaxPlayers < 2 || d.MaxPlayers > 6 {
 		d.MaxPlayers = 5
@@ -109,7 +118,11 @@ func commandTableCreate(ctx context.Context, s *Session, d *CommandData) {
 	// If PregameStats is already set (e.g. called from tableRestart which pre-fetched before
 	// acquiring its own locks), skip this to avoid a redundant DB round-trip.
 	if d.PregameStats == nil {
-		variant := variants[d.Options.VariantName]
+		variantName := d.Options.VariantName
+		if data.SetReplay {
+			variantName = d.PreFetchedReplay.Options.VariantName
+		}
+		variant := variants[variantName]
 		var numGames int
 		if v, err := models.Games.GetUserNumGames(s.UserID, false); err != nil {
 			logger.Error("Failed to pre-fetch game count for \"" + s.Username + "\": " + err.Error())
@@ -127,6 +140,17 @@ func commandTableCreate(ctx context.Context, s *Session, d *CommandData) {
 			variantStats = v
 		}
 		d.PregameStats = &PregameStats{NumGames: numGames, Variant: variantStats}
+	}
+
+	if d.Password != "" {
+		if v, err := argon2id.CreateHash(d.Password, argon2id.DefaultParams); err != nil {
+			logger.Error("Failed to create a hash from the submitted table password: " +
+				err.Error())
+			s.Error(CreateGameFail)
+			return
+		} else {
+			d.PasswordHash = v
+		}
 	}
 
 	tableCreate(ctx, s, d, data)
@@ -150,27 +174,12 @@ func tableCreate(ctx context.Context, s *Session, d *CommandData, data *SpecialG
 		}
 	}
 
-	passwordHash := ""
-	if d.Password != "" {
-		// Create an Argon2id hash of the plain-text password
-		if v, err := argon2id.CreateHash(d.Password, argon2id.DefaultParams); err != nil {
-			logger.Error("Failed to create a hash from the submitted table password: " +
-				err.Error())
-			s.Error(CreateGameFail)
-			return
-		} else {
-			passwordHash = v
-		}
-	} else if d.PasswordHash != "" {
-		passwordHash = d.PasswordHash
-	}
-
 	t := NewTable(d.Name, s.UserID)
 	t.OwnerUsername = s.Username
 	t.Lock(ctx)
 	defer t.Unlock(ctx)
 	t.Visible = !d.HidePregame
-	t.PasswordHash = passwordHash
+	t.PasswordHash = d.PasswordHash
 	t.MaxPlayers = d.MaxPlayers
 	t.Options = d.Options
 	t.ExtraOptions = &ExtraOptions{
@@ -190,9 +199,11 @@ func tableCreate(ctx context.Context, s *Session, d *CommandData, data *SpecialG
 
 	// If this is a "!replay" game, override the options with the ones found in the database
 	if data.SetReplay {
-		// No pre-fetched data is available here (SpecialGameData is not CommandData), so
-		// loadDatabaseOptionsToTable will fall through to its DB-call paths as before.
-		if _, success := loadDatabaseOptionsToTable(s, &CommandData{DatabaseID: data.DatabaseID}, t); !success { // nolint: exhaustivestruct
+		replayData := &CommandData{ // nolint: exhaustivestruct
+			DatabaseID:       data.DatabaseID,
+			PreFetchedReplay: d.PreFetchedReplay,
+		}
+		if _, success := loadDatabaseOptionsToTable(s, replayData, t); !success {
 			return
 		}
 

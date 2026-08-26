@@ -14,32 +14,28 @@ func chatSplitAuto(ctx context.Context, s *Session, d *CommandData, t *Table, cm
 }
 
 func commandTableSplitAuto(ctx context.Context, s *Session, d *CommandData, tableID uint64) {
-	// Acquire the tables lock first so that we can safely get the table and determine players to move
-	tables.Lock(ctx)
-
-	t, exists := getTableAndLock(ctx, s, tableID, true, false)
+	t, exists := getTableAndLock(ctx, s, tableID, true, true)
 	if !exists {
-		tables.Unlock(ctx)
 		return
 	}
+	tableLocked := true
+	defer func() {
+		if tableLocked {
+			t.Unlock(ctx)
+		}
+	}()
 
 	if t.Running {
-		t.Unlock(ctx)
-		tables.Unlock(ctx)
 		chatServerSend(ctx, NotStartedFail, d.Room, true)
 		return
 	}
 
 	if s.UserID != t.OwnerID {
-		t.Unlock(ctx)
-		tables.Unlock(ctx)
 		chatServerSend(ctx, NotOwnerFail, d.Room, true)
 		return
 	}
 
 	if len(t.Players) < 2 {
-		t.Unlock(ctx)
-		tables.Unlock(ctx)
 		chatServerSend(ctx, "There must be at least 2 players to split.", d.Room, true)
 		return
 	}
@@ -78,10 +74,9 @@ func commandTableSplitAuto(ctx context.Context, s *Session, d *CommandData, tabl
 	logger.Info(t.GetName() + "User \"" + s.Username + "\" initiated automatic split by game count. " +
 		"Moving: " + strings.Join(movedGroupNames, ", "))
 
-	// Release locks before delegating to /split so that commandTableSplit can
-	// acquire locks in its own correct order (tables -> table) without deadlock.
+	// Release the table before delegating; commandTableSplit reacquires and revalidates it.
 	t.Unlock(ctx)
-	tables.Unlock(ctx)
+	tableLocked = false
 
 	// Use the existing /split command logic by setting d.Args and calling commandTableSplit
 	d.Args = movedGroupNames

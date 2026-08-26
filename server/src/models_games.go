@@ -38,13 +38,25 @@ type GamesRow struct {
 }
 
 func (*Games) Insert(gameRow GameRow) (int, error) {
+	return insertGame(db, gameRow)
+}
+
+type gameRowQuerier interface {
+	QueryRow(context.Context, string, ...interface{}) pgx.Row
+}
+
+func (*Games) InsertTx(tx pgx.Tx, gameRow GameRow) (int, error) {
+	return insertGame(tx, gameRow)
+}
+
+func insertGame(queryer gameRowQuerier, gameRow GameRow) (int, error) {
 	// Local variables
 	variant := variants[gameRow.Options.VariantName]
 
 	// https://www.postgresql.org/docs/9.5/dml-returning.html
 	// https://github.com/jackc/pgx/issues/411
 	var id int
-	if err := db.QueryRow(
+	if err := queryer.QueryRow(
 		context.Background(),
 		`
 			INSERT INTO games (

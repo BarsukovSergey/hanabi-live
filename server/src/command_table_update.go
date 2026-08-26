@@ -14,20 +14,26 @@ import (
 // the "Create a New Game" form from within pre-game
 //
 // Example data:
-// {
-//   name: 'my new table',
-//   options: {
-//     variant: 'No Variant',
-//     [other options omitted; see "Options.ts"]
-//   },
-// }
+//
+//	{
+//	  name: 'my new table',
+//	  options: {
+//	    variant: 'No Variant',
+//	    [other options omitted; see "Options.ts"]
+//	  },
+//	}
 func commandTableUpdate(ctx context.Context, s *Session, d *CommandData) {
 	t, exists := getTableAndLock(ctx, s, d.TableID, !d.NoTableLock, !d.NoTablesLock)
 	if !exists {
 		return
 	}
+	tableLocked := !d.NoTableLock
 	if !d.NoTableLock {
-		defer t.Unlock(ctx)
+		defer func() {
+			if tableLocked {
+				t.Unlock(ctx)
+			}
+		}()
 	}
 
 	if t.Running {
@@ -170,8 +176,32 @@ func commandTableUpdate(ctx context.Context, s *Session, d *CommandData) {
 		return
 	}
 
+	if d.NoTableLock || d.NoTablesLock {
+		logger.Error("commandTableUpdate was called while the caller held table locks.")
+		s.Error(DefaultErrorMsg)
+		return
+	}
+
+	t.Unlock(ctx)
+	tableLocked = false
 	if valid, message := isTableCommandValid(s, d, data); !valid {
 		s.Warning(message)
+		return
+	}
+
+	reloadedTable, tableExists := getTableAndLock(ctx, s, d.TableID, true, !d.NoTablesLock)
+	if !tableExists {
+		return
+	}
+	t = reloadedTable
+	tableLocked = true
+
+	if t.Running {
+		s.Warning(StartedFail)
+		return
+	}
+	if s.UserID != t.OwnerID {
+		s.Warning("Only the table owner can change game options.")
 		return
 	}
 
@@ -182,40 +212,87 @@ func commandTableUpdate(ctx context.Context, s *Session, d *CommandData) {
 		return
 	}
 
-	// Sanitize max players
 	d.MaxPlayers = between(d.MaxPlayers, 2, 6, 5)
-	// Kick extra players
-	if d.MaxPlayers < len(t.Players) {
-		extraPlayers := t.Players[d.MaxPlayers:]
-		for _, p := range extraPlayers {
-			// Get the session
-			s2 := p.Session
-			if s2 == nil {
-				// A player's session should never be nil
-				// They might be in the process of reconnecting,
-				// so make a fake session that will represent them
-				s2 = NewFakeSession(p.UserID, p.Name)
-				logger.Info("Created a new fake session in the \"chatKick()\" function.")
+	for {
+		kickPlayersOverLimit(ctx, d, t)
+
+		players := make([]*Player, len(t.Players))
+		copy(players, t.Players)
+		numGamesByUserID := make(map[int]int, len(players))
+		for _, p := range players {
+			numGamesByUserID[p.UserID] = p.Stats.NumGames
+		}
+		variant := variants[d.Options.VariantName]
+
+		t.Unlock(ctx)
+		tableLocked = false
+		variantStatsByUserID := make(map[int]*UserStatsRow, len(players))
+		for _, p := range players {
+			v, err := models.UserStats.Get(p.UserID, variant.ID)
+			if err != nil {
+				logger.Error("Failed to get the stats for player \"" + s.Username +
+					"\" for variant " + strconv.Itoa(variant.ID) + ": " + err.Error())
+				s.Error(DefaultErrorMsg)
+				return
 			}
+			variantStatsByUserID[p.UserID] = v
+		}
 
-			// Remove them from the table
-			commandTableLeave(ctx, s2, &CommandData{ // nolint: exhaustivestruct
-				TableID:     t.ID,
-				NoTableLock: true,
-			})
-
-			// Inform the player
-			msg := "You have been removed from the table due to new max players restriction."
-			chatServerSendPM(s2, msg, "lobby")
+		reloadedTable, exists := getTableAndLock(ctx, s, d.TableID, true, !d.NoTablesLock)
+		if !exists {
+			return
+		}
+		t = reloadedTable
+		tableLocked = true
+		if t.Running {
+			s.Warning(StartedFail)
+			return
+		}
+		if s.UserID != t.OwnerID {
+			s.Warning("Only the table owner can change game options.")
+			return
+		}
+		if sameTablePlayers(players, t.Players) {
+			tableUpdate(ctx, s, d, data, t, variantStatsByUserID, numGamesByUserID)
+			return
 		}
 	}
-
-	tableUpdate(ctx, s, d, data, t)
 }
 
-func tableUpdate(ctx context.Context, s *Session, d *CommandData, data *SpecialGameData, t *Table) {
-	// Local variables
-	variant := variants[d.Options.VariantName]
+func kickPlayersOverLimit(ctx context.Context, d *CommandData, t *Table) {
+	if d.MaxPlayers >= len(t.Players) {
+		return
+	}
+
+	extraPlayers := t.Players[d.MaxPlayers:]
+	for _, p := range extraPlayers {
+		s := p.Session
+		if s == nil {
+			s = NewFakeSession(p.UserID, p.Name)
+			logger.Info("Created a new fake session in the \"kickPlayersOverLimit()\" function.")
+		}
+
+		commandTableLeave(ctx, s, &CommandData{ // nolint: exhaustivestruct
+			TableID:     t.ID,
+			NoTableLock: true,
+		})
+		chatServerSendPM(
+			s,
+			"You have been removed from the table due to new max players restriction.",
+			"lobby",
+		)
+	}
+}
+
+func tableUpdate(
+	ctx context.Context,
+	s *Session,
+	d *CommandData,
+	data *SpecialGameData,
+	t *Table,
+	variantStatsByUserID map[int]*UserStatsRow,
+	numGamesByUserID map[int]int,
+) {
 
 	// First, change the table options
 	t.Name = d.Name
@@ -237,50 +314,10 @@ func tableUpdate(ctx context.Context, s *Session, d *CommandData, data *SpecialG
 		SetReplayTurn:              0,
 	}
 
-	// Snapshot each player's userID and numGames before releasing t.Lock.
-	// models.UserStats.Get issues a DB query; holding t.Lock during that call can exhaust
-	// the pgxpool and deadlock the server.
-	type playerSnapshot struct {
-		userID   int
-		numGames int
-	}
-	snapshot := make([]playerSnapshot, len(t.Players))
-	for i, p := range t.Players {
-		snapshot[i] = playerSnapshot{userID: p.UserID, numGames: p.Stats.NumGames}
-	}
-
-	if !d.NoTableLock {
-		t.Unlock(ctx)
-	}
-	variantStatsMap := make(map[int]*UserStatsRow, len(snapshot))
-	for _, entry := range snapshot {
-		v, err := models.UserStats.Get(entry.userID, variant.ID)
-		if err != nil {
-			logger.Error("Failed to get the stats for player \"" + s.Username + "\" for variant " +
-				strconv.Itoa(variant.ID) + ": " + err.Error())
-			if !d.NoTableLock {
-				t.Lock(ctx)
-			}
-			s.Error(DefaultErrorMsg)
-			return
-		}
-		variantStatsMap[entry.userID] = v
-	}
-	if !d.NoTableLock {
-		t.Lock(ctx)
-	}
-
-	// Update the variant-specific stats for each player at the table.
-	// Use the numGames snapshot from before the unlock (correct: numGames only changes on game end).
-	// Any player who joined while unlocked already has stats for the new variant from commandTableJoin.
-	numGamesMap := make(map[int]int, len(snapshot))
-	for _, entry := range snapshot {
-		numGamesMap[entry.userID] = entry.numGames
-	}
 	for _, p := range t.Players {
-		if variantStats, ok := variantStatsMap[p.UserID]; ok {
+		if variantStats, ok := variantStatsByUserID[p.UserID]; ok {
 			p.Stats = &PregameStats{
-				NumGames: numGamesMap[p.UserID],
+				NumGames: numGamesByUserID[p.UserID],
 				Variant:  variantStats,
 			}
 		}
@@ -295,7 +332,4 @@ func tableUpdate(ctx context.Context, s *Session, d *CommandData, data *SpecialG
 
 	msg := s.Username + " has changed game options."
 	chatServerSend(ctx, msg, t.GetRoomName(), d.NoTablesLock)
-
-	// Add the table to a map so that we can keep track of all of the active tables
-	tables.Set(t.ID, t)
 }

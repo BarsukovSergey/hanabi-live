@@ -18,6 +18,7 @@ type Tables struct {
 	disconSpectating map[int]uint64    // Indexed by user ID, value is a table ID
 	disconShadowing  map[int]int       // Indexed by user ID, value is a seat
 	mutex            *deadlock.RWMutex // For handling concurrent access
+	spectatingMutex  *deadlock.RWMutex // Kept separate so table-locked reads cannot invert mutex order
 }
 
 func NewTables() *Tables {
@@ -28,6 +29,7 @@ func NewTables() *Tables {
 		disconSpectating: make(map[int]uint64),
 		disconShadowing:  make(map[int]int),
 		mutex:            &deadlock.RWMutex{},
+		spectatingMutex:  &deadlock.RWMutex{},
 	}
 }
 
@@ -102,17 +104,16 @@ func (ts *Tables) Delete(tableID uint64) {
 	for _, userID := range usersJoinedToTable {
 		ts.DeletePlaying(userID, tableID)
 	}
-	usersSpectatingTable := make([]int, 0)
+	ts.spectatingMutex.Lock()
 	for userID, tableIDs := range ts.spectating {
 		for _, relationshipTableID := range tableIDs {
 			if relationshipTableID == tableID {
-				usersSpectatingTable = append(usersSpectatingTable, userID)
+				ts.deleteSpectating(userID, tableID)
+				break
 			}
 		}
 	}
-	for _, userID := range usersSpectatingTable {
-		ts.DeleteSpectating(userID, tableID)
-	}
+	ts.spectatingMutex.Unlock()
 }
 
 // ----------------------------
@@ -175,7 +176,9 @@ func (ts *Tables) PrintPlaying() {
 // -------------------------------
 
 func (ts *Tables) AddSpectating(userID int, tableID uint64) {
-	// It is assumed that the tables mutex is locked when calling this function
+	ts.spectatingMutex.Lock()
+	defer ts.spectatingMutex.Unlock()
+
 	tableList, ok := ts.spectating[userID]
 	if !ok {
 		tableList = make([]uint64, 0)
@@ -185,7 +188,13 @@ func (ts *Tables) AddSpectating(userID int, tableID uint64) {
 }
 
 func (ts *Tables) DeleteSpectating(userID int, tableID uint64) {
-	// It is assumed that the tables mutex is locked when calling this function
+	ts.spectatingMutex.Lock()
+	defer ts.spectatingMutex.Unlock()
+
+	ts.deleteSpectating(userID, tableID)
+}
+
+func (ts *Tables) deleteSpectating(userID int, tableID uint64) {
 	tableList, ok := ts.spectating[userID]
 	if !ok {
 		return
@@ -205,15 +214,19 @@ func (ts *Tables) DeleteSpectating(userID int, tableID uint64) {
 }
 
 func (ts *Tables) GetTablesUserSpectating(userID int) []uint64 {
-	// It is assumed that the tables mutex is locked when calling this function
+	ts.spectatingMutex.RLock()
+	defer ts.spectatingMutex.RUnlock()
+
 	if tablesList, ok := ts.spectating[userID]; ok {
-		return tablesList
+		return append([]uint64(nil), tablesList...)
 	}
 	return make([]uint64, 0)
 }
 
 func (ts *Tables) PrintSpectating() {
-	// It is assumed that the tables mutex is locked when calling this function
+	ts.spectatingMutex.RLock()
+	defer ts.spectatingMutex.RUnlock()
+
 	logger.Debug("Spectating relationships:")
 	for userID, tableIDs := range ts.spectating {
 		tableIDStrings := make([]string, 0)
@@ -331,7 +344,7 @@ func getTableAndLock(
 }
 
 func getTableIDFromName(ctx context.Context, tableName string) (uint64, bool) {
-	tableList := tables.GetList(false)
+	tableList := tables.GetList(true)
 	for _, t := range tableList {
 		foundTable := false
 		t.Lock(ctx)

@@ -23,6 +23,10 @@ func (g *Game) End(ctx context.Context, d *CommandData) {
 	if g.ExtraOptions.NoWriteToDatabase {
 		return
 	}
+	if t.Ending {
+		return
+	}
+	t.Ending = true
 
 	// Send text messages showing how much time each player finished with
 	// and the duration of the game
@@ -60,9 +64,12 @@ func (g *Game) End(ctx context.Context, d *CommandData) {
 	// Release the table lock before any DB calls to avoid exhausting the pgxpool
 	// while other goroutines wait for this same lock (which would deadlock the server).
 	// The caller's defer t.Unlock() (or explicit unlock) will fire on the re-locked mutex.
+	tableSnapshot := snapshotGameDatabaseTable(t)
 	t.Unlock(ctx)
-	if err := g.WriteDatabase(); err != nil {
+	databaseID, err := g.WriteDatabase(tableSnapshot)
+	if err != nil {
 		t.Lock(ctx)
+		t.EndingFailed = true
 		return
 	}
 
@@ -70,12 +77,12 @@ func (g *Game) End(ctx context.Context, d *CommandData) {
 	var numGamesOnThisSeed int
 	if v, err := models.Seeds.GetNumGames(g.Seed); err != nil {
 		logger.Error("Failed to get the number of games on seed " + g.Seed + ": " + err.Error())
-		t.Lock(ctx)
-		return
+		numGamesOnThisSeed = 0
 	} else {
 		numGamesOnThisSeed = v
 	}
 	t.Lock(ctx) // Re-acquire now that all DB work is done
+	t.ExtraOptions.DatabaseID = databaseID
 	playerNames := make([]string, 0)
 	for _, p := range t.Players {
 		playerNames = append(playerNames, p.Name)
@@ -84,7 +91,7 @@ func (g *Game) End(ctx context.Context, d *CommandData) {
 	gameHistoryList := make([]*GameHistory, 0)
 	gameHistoryList = append(gameHistoryList, &GameHistory{ // nolint: exhaustivestruct
 		// The ID is recorded in the "WriteDatabase()" function above
-		ID:                 g.ExtraOptions.DatabaseID,
+		ID:                 databaseID,
 		Options:            g.Options,
 		Seed:               g.Seed,
 		Score:              g.Score,
@@ -113,11 +120,55 @@ func (g *Game) End(ctx context.Context, d *CommandData) {
 	t.ConvertToSharedReplay(ctx, d)
 }
 
-func (g *Game) WriteDatabase() error {
-	t := g.Table
+type gameDatabasePlayer struct {
+	userID int
+	name   string
+}
+
+type gameDatabaseTableSnapshot struct {
+	tableID uint64
+	name    string
+	players []gameDatabasePlayer
+	chat    []*ChatLogRow
+	tags    map[string]int
+}
+
+func snapshotGameDatabaseTable(t *Table) *gameDatabaseTableSnapshot {
+	players := make([]gameDatabasePlayer, len(t.Players))
+	for i, p := range t.Players {
+		players[i] = gameDatabasePlayer{
+			userID: p.UserID,
+			name:   p.Name,
+		}
+	}
+
+	chat := make([]*ChatLogRow, 0, len(t.Chat))
+	for _, chatMsg := range t.Chat {
+		chat = append(chat, &ChatLogRow{
+			UserID:  chatMsg.UserID,
+			Message: chatMsg.Msg,
+			Room:    t.GetRoomName(),
+		})
+	}
+
+	tags := make(map[string]int, len(t.Game.Tags))
+	for tag, userID := range t.Game.Tags {
+		tags[tag] = userID
+	}
+
+	return &gameDatabaseTableSnapshot{
+		tableID: t.ID,
+		name:    t.Name,
+		players: players,
+		chat:    chat,
+		tags:    tags,
+	}
+}
+
+func (g *Game) WriteDatabase(tableSnapshot *gameDatabaseTableSnapshot) (int, error) {
 
 	row := GameRow{
-		Name:             t.Name,
+		Name:             tableSnapshot.name,
 		Options:          g.Options,
 		Seed:             g.Seed,
 		Score:            g.Score,
@@ -126,28 +177,36 @@ func (g *Game) WriteDatabase() error {
 		DatetimeStarted:  g.DatetimeStarted,
 		DatetimeFinished: g.DatetimeFinished,
 	}
-	if v, err := models.Games.Insert(row); err != nil {
+	tx, err := db.Begin(context.Background())
+	if err != nil {
+		logger.Error("Failed to begin the game database transaction: " + err.Error())
+		return 0, err
+	}
+	defer func() {
+		_ = tx.Rollback(context.Background())
+	}()
+
+	databaseID, err := models.Games.InsertTx(tx, row)
+	if err != nil {
 		logger.Error("Failed to insert the game row: " + err.Error())
-		return err
-	} else {
-		t.ExtraOptions.DatabaseID = v
+		return 0, err
 	}
 
 	// Next, we insert rows for each of the participants
 	gameParticipantsRows := make([]*GameParticipantsRow, 0)
 	for _, gp := range g.Players {
-		p := t.Players[gp.Index]
+		p := tableSnapshot.players[gp.Index]
 
 		characterID := 0
 		characterMetadata := 0
-		if t.Options.DetrimentalCharacters {
+		if g.Options.DetrimentalCharacters {
 			if gp.Character == "n/a" {
 				characterID = -1
 			} else {
 				if v, ok := characters[gp.Character]; !ok {
 					logger.Error("Failed to find the ID for character \"" + gp.Character + "\" " +
 						"when ending the game.")
-					return errors.New("the character of " + gp.Character +
+					return 0, errors.New("the character of " + gp.Character +
 						" does not exist in the characters map")
 				} else {
 					characterID = v.ID
@@ -167,23 +226,23 @@ func (g *Game) WriteDatabase() error {
 		}
 
 		gameParticipantsRows = append(gameParticipantsRows, &GameParticipantsRow{
-			GameID:              t.ExtraOptions.DatabaseID,
-			UserID:              p.UserID,
+			GameID:              databaseID,
+			UserID:              p.userID,
 			Seat:                gp.Index,
 			CharacterAssignment: characterID,
 			CharacterMetadata:   characterMetadata,
 		})
 	}
-	if err := models.GameParticipants.BulkInsert(gameParticipantsRows); err != nil {
+	if err := models.GameParticipants.BulkInsertTx(tx, gameParticipantsRows); err != nil {
 		logger.Error("Failed to insert the game participant rows: " + err.Error())
-		return err
+		return 0, err
 	}
 
 	// Next, we insert rows for each of the actions
 	gameActionRows := make([]*GameActionRow, 0)
 	for i, action := range g.Actions2 {
 		gameActionRows = append(gameActionRows, &GameActionRow{
-			GameID: t.ExtraOptions.DatabaseID,
+			GameID: databaseID,
 			Turn:   i,
 			Type:   action.Type,
 			Target: action.Target,
@@ -191,16 +250,20 @@ func (g *Game) WriteDatabase() error {
 		})
 	}
 	if len(gameActionRows) > 0 {
-		if err := models.GameActions.BulkInsert(gameActionRows); err != nil {
+		if err := models.GameActions.BulkInsertTx(tx, gameActionRows); err != nil {
 			logger.Error("Failed to insert the game action rows: " + err.Error())
-			return err
+			return 0, err
 		}
+	}
+	if err := tx.Commit(context.Background()); err != nil {
+		logger.Error("Failed to commit the game database transaction: " + err.Error())
+		return 0, err
 	}
 
 	// Next, we insert rows for each note
 	gameParticipantNotesRows := make([]*GameParticipantNotesRow, 0)
 	for _, gp := range g.Players {
-		p := t.Players[gp.Index]
+		p := tableSnapshot.players[gp.Index]
 
 		for j, note := range gp.Notes {
 			if note == "" {
@@ -208,8 +271,8 @@ func (g *Game) WriteDatabase() error {
 			}
 
 			gameParticipantNotesRows = append(gameParticipantNotesRows, &GameParticipantNotesRow{
-				GameID:    t.ExtraOptions.DatabaseID,
-				UserID:    p.UserID,
+				GameID:    databaseID,
+				UserID:    p.userID,
 				CardOrder: j,
 				Note:      note,
 			})
@@ -224,16 +287,8 @@ func (g *Game) WriteDatabase() error {
 	}
 
 	// Next, we insert rows for each chat message (if any)
-	chatLogRows := make([]*ChatLogRow, 0)
-	for _, chatMsg := range t.Chat {
-		chatLogRows = append(chatLogRows, &ChatLogRow{
-			UserID:  chatMsg.UserID,
-			Message: chatMsg.Msg,
-			Room:    t.GetRoomName(),
-		})
-	}
-	if len(chatLogRows) > 0 {
-		if err := models.ChatLog.BulkInsert(chatLogRows); err != nil {
+	if len(tableSnapshot.chat) > 0 {
+		if err := models.ChatLog.BulkInsert(tableSnapshot.chat); err != nil {
 			logger.Error("Failed to insert the chat message rows: " + err.Error())
 			// Do not return on failed chat insertion,
 			// since it should not affect subsequent operations
@@ -242,9 +297,9 @@ func (g *Game) WriteDatabase() error {
 
 	// Next, we insert rows for each tag (if any)
 	gameTagsRows := make([]*GameTagsRow, 0)
-	for tag, userID := range g.Tags {
+	for tag, userID := range tableSnapshot.tags {
 		gameTagsRows = append(gameTagsRows, &GameTagsRow{
-			GameID: t.ExtraOptions.DatabaseID,
+			GameID: databaseID,
 			UserID: userID,
 			Tag:    tag,
 		})
@@ -265,30 +320,30 @@ func (g *Game) WriteDatabase() error {
 	}
 
 	// We also need to update stats in the database, but that can be done in the background
-	go g.WriteDatabaseStats()
+	go g.WriteDatabaseStats(tableSnapshot.players)
 
-	logger.Info("Finished core database actions for table " + strconv.FormatUint(t.ID, 10) +
-		" (to database ID " + strconv.Itoa(t.ExtraOptions.DatabaseID) + ").")
-	return nil
+	logger.Info("Finished core database actions for table " +
+		strconv.FormatUint(tableSnapshot.tableID, 10) +
+		" (to database ID " + strconv.Itoa(databaseID) + ").")
+	return databaseID, nil
 }
 
 // WriteDatabaseStats is meant to be called in a new goroutine
 // Updating the stats is not as important as writing the core data for a game,
 // so it can be handled in the background
-func (g *Game) WriteDatabaseStats() {
+func (g *Game) WriteDatabaseStats(players []gameDatabasePlayer) {
 	// Local variables
-	t := g.Table
 	variant := variants[g.Options.VariantName]
 	// 2-player is at index 0, 3-player is at index 1, etc.
 	bestScoreIndex := g.Options.NumPlayers - 2
 
 	// Update the variant-specific stats for each player
 	modifier := g.Options.GetModifier()
-	for _, p := range t.Players {
+	for _, p := range players {
 		// Get their current best scores
 		var userStats *UserStatsRow
-		if v, err := models.UserStats.Get(p.UserID, variant.ID); err != nil {
-			logger.Error("Failed to get the stats for user " + p.Name + ": " + err.Error())
+		if v, err := models.UserStats.Get(p.userID, variant.ID); err != nil {
+			logger.Error("Failed to get the stats for user " + p.name + ": " + err.Error())
 			continue
 		} else {
 			userStats = v
@@ -308,8 +363,8 @@ func (g *Game) WriteDatabaseStats() {
 		// Update their stats
 		// (even if they did not get a new best score,
 		// we still want to update their average score and strikeout rate)
-		if err := models.UserStats.Update(p.UserID, variant.ID, userStats); err != nil {
-			logger.Error("Failed to update the stats for user " + p.Name + ": " + err.Error())
+		if err := models.UserStats.Update(p.userID, variant.ID, userStats); err != nil {
+			logger.Error("Failed to update the stats for user " + p.name + ": " + err.Error())
 			continue
 		}
 	}
@@ -353,6 +408,8 @@ func (t *Table) ConvertToSharedReplay(ctx context.Context, d *CommandData) {
 	}
 
 	t.Replay = true
+	t.Ending = false
+	t.EndingFailed = false
 	t.InitialName = t.Name
 	t.Name += " (Game #" + strconv.Itoa(t.ExtraOptions.DatabaseID) + ")"
 	// Update the "EndTurn" field (since we incremented the final turn above in an artificial way)

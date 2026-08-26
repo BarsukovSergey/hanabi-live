@@ -25,6 +25,18 @@ type GameActionRow struct {
 }
 
 func (*GameActions) BulkInsert(gameActionRows []*GameActionRow) error {
+	SQLString, valueArgs := getGameActionsBulkInsert(gameActionRows)
+	_, err := db.Exec(context.Background(), SQLString, valueArgs...)
+	return err
+}
+
+func (*GameActions) BulkInsertTx(tx pgx.Tx, gameActionRows []*GameActionRow) error {
+	SQLString, valueArgs := getGameActionsBulkInsert(gameActionRows)
+	_, err := tx.Exec(context.Background(), SQLString, valueArgs...)
+	return err
+}
+
+func getGameActionsBulkInsert(gameActionRows []*GameActionRow) (string, []interface{}) {
 	SQLString := `
 		INSERT INTO game_actions (
 			game_id,
@@ -49,8 +61,7 @@ func (*GameActions) BulkInsert(gameActionRows []*GameActionRow) error {
 	}
 	SQLString = getBulkInsertSQLSimple(SQLString, numArgsPerRow, len(gameActionRows))
 
-	_, err := db.Exec(context.Background(), SQLString, valueArgs...)
-	return err
+	return SQLString, valueArgs
 }
 
 func (*GameActions) GetAll(databaseID int) ([]*GameAction, error) {

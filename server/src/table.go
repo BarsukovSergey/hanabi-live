@@ -31,14 +31,16 @@ type Table struct {
 	// call (which would be unsafe while holding table/tables locks).
 	OwnerID       int
 	OwnerUsername string
-	Visible bool // Whether or not this table is shown to other users
+	Visible       bool // Whether or not this table is shown to other users
 	// This is an Argon2id hash generated from the plain-text password
 	// that the table creator sends us
 	PasswordHash   string
 	Running        bool
 	Replay         bool
-	AutomaticStart int // See "chatTable.go" (this will not be reimplemented in the TypeScript server)
-	Progress       int // Displayed as a percentage on the main lobby screen
+	Ending         bool `json:"-"`
+	EndingFailed   bool `json:"-"`
+	AutomaticStart int  // See "chatTable.go" (this will not be reimplemented in the TypeScript server)
+	Progress       int  // Displayed as a percentage on the main lobby screen
 
 	DatetimeCreated      time.Time
 	DatetimeLastJoined   time.Time
@@ -93,6 +95,8 @@ func NewTable(name string, ownerID int) *Table {
 		PasswordHash:   "",
 		Running:        false,
 		Replay:         false,
+		Ending:         false,
+		EndingFailed:   false,
 		AutomaticStart: 0,
 		Progress:       0,
 
@@ -181,7 +185,6 @@ func (t *Table) EndIdle(ctx context.Context) {
 	// Since this is a function that changes a user's relationship to tables,
 	// we must acquires the tables lock to prevent race conditions
 	tables.Lock(ctx)
-	defer tables.Unlock(ctx)
 
 	if t.Replay {
 		// If this is a replay,
@@ -210,29 +213,29 @@ func (t *Table) EndIdle(ctx context.Context) {
 	if t.Replay {
 		// If this is a replay, then we are done;
 		// it should automatically end now that all of the spectators have left
+		tables.Unlock(ctx)
 		return
 	}
 
 	s := t.GetOwnerSession()
+	tables.Unlock(ctx)
 	if t.Running {
 		// We need to end a game that has started
 		// (this will put everyone in a non-shared replay of the idle game)
 		commandAction(ctx, s, &CommandData{ // nolint: exhaustivestruct
-			TableID:      t.ID,
-			Type:         ActionTypeEndGame,
-			Target:       -1,
-			Value:        EndConditionIdleTimeout,
-			NoTableLock:  true,
-			NoTablesLock: true,
+			TableID:     t.ID,
+			Type:        ActionTypeEndGame,
+			Target:      -1,
+			Value:       EndConditionIdleTimeout,
+			NoTableLock: true,
 		})
 	} else {
 		// We need to end a game that has not started yet
 		// Force the owner to leave, which should subsequently eject everyone else
 		// (this will send everyone back to the main lobby screen)
 		commandTableLeave(ctx, s, &CommandData{ // nolint: exhaustivestruct
-			TableID:      t.ID,
-			NoTableLock:  true,
-			NoTablesLock: true,
+			TableID:     t.ID,
+			NoTableLock: true,
 		})
 	}
 }

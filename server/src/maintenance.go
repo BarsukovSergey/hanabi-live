@@ -26,9 +26,5 @@ func maintenance(ctx context.Context, enabled bool) {
 		msg += "disabled."
 	}
 
-	// We must acquires the tables lock before entering the "chatServerSendAll()" function.
-	tables.Lock(ctx)
-	defer tables.Unlock(ctx)
-
 	chatServerSendAll(ctx, msg)
 }
