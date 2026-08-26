@@ -36,6 +36,7 @@ bash "$DIR/set_version.sh"
 if ! command -v npm > /dev/null; then
   # Assume that Node Version Manager (fnm) is being used on this system.
   # https://github.com/schniz/fnm
+  HOME="${HOME:-/root}"
   FNM_PATH="$HOME/.local/share/fnm/fnm"
   if [[ ! -x "$FNM_PATH" ]]; then
     echo "Failed to find the \"fnm\" binary (in the \"$FNM_PATH\" directory)."
