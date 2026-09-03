@@ -16,4 +16,4 @@ npx esbuild "$REPO_ROOT/packages/client/src/standalone/pips-reference.ts" \
   --format=iife \
   --platform=browser
 
-echo "Build complete! Open \"public/pips-reference.html\" in a browser."
+echo "Build complete! Open \"public/standalone/pips-reference.html\" in a browser."
