@@ -237,6 +237,19 @@
             <img src="/public/img/ajax.gif" />
           </section>
 
+          {{ if (it.isDev) { }}
+            <section id="client-bundle-error" class="box align-center hidden">
+              <h3>Client bundle not found</h3>
+              <p>
+                This appears to be a development installation of
+                {{= it.projectName }}. The "public/js/bundles/main.min.js"
+                file was not found. Did you start the server with
+                <code>./run.sh</code>? Instead, try starting the server with
+                <code>./dev.sh</code>, and then refresh the page.
+              </p>
+            </section>
+          {{ } }}
+
           <section id="firefox-warning" class="box align-center hidden">
             <h3>Warning!</h3>
             <p>
@@ -1935,6 +1948,10 @@
   <script
     type="text/javascript"
     src="/public/js/bundles/main.min.js"
+    onerror="
+      document.getElementById('loading').classList.add('hidden');
+      document.getElementById('client-bundle-error').classList.remove('hidden');
+    "
   ></script>
 {{ } else { }}
   <script
