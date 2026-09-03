@@ -1,7 +1,8 @@
 import { assertNotNull } from "complete-common";
+import type { CardRendererBackend } from "./cardRendererBackend";
 import { CARD_H, CARD_W } from "./constants";
 
-export function initCanvas(): {
+function initCanvas(): {
   cvs: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
 } {
@@ -18,7 +19,7 @@ export function initCanvas(): {
   };
 }
 
-export function cloneCanvas(
+function cloneCanvas(
   oldCvs: HTMLCanvasElement,
   _oldCtx: CanvasRenderingContext2D,
 ): HTMLCanvasElement {
@@ -34,9 +35,18 @@ export function cloneCanvas(
   return newCvs;
 }
 
-export function saveCanvas(
+function saveCanvas(
   cvs: HTMLCanvasElement,
   _ctx: CanvasRenderingContext2D,
 ): HTMLCanvasElement {
   return cvs;
 }
+
+export const cardRendererBackend: CardRendererBackend<
+  HTMLCanvasElement,
+  HTMLCanvasElement
+> = {
+  createCanvas: initCanvas,
+  cloneCanvas,
+  saveCanvas,
+};

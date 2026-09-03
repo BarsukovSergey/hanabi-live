@@ -13,15 +13,11 @@ const UNKNOWN_CARD_RANK = 6;
 // Get the specified variant.
 const variant = getVariant("Brown (6 Suits)");
 
-const cardImages = drawCards(
-  variant,
-  false,
-  false,
-  false,
-  drawCardsNode.initCanvas,
-  drawCardsNode.cloneCanvas,
-  drawCardsNode.saveCanvas,
-);
+const cardImages = drawCards(variant, false, false, false, {
+  createCanvas: drawCardsNode.initCanvas,
+  cloneCanvas: drawCardsNode.cloneCanvas,
+  saveCanvas: drawCardsNode.saveCanvas,
+});
 const allCardImages = new Map<string, HTMLCanvasElement>();
 for (const [key, value] of cardImages.entries()) {
   if (!allCardImages.has(key)) {

@@ -6,6 +6,7 @@ import {
   getSuit,
   getSuitAbbreviationForVariant,
 } from "@hanabi-live/game";
+import type { CardRendererBackend } from "./cardRendererBackend";
 import { CARD_H, CARD_W } from "./constants";
 import { drawPip } from "./drawPip";
 import { drawStylizedRank } from "./drawStylizedRank";
@@ -28,22 +29,15 @@ export const CARD_IMAGE_STACK_BASE_RANK_NAME = "StackBase";
 export const CARD_IMAGE_UNKNOWN_CARD_RANK_NAME = "UnknownRank";
 
 /** Returns an object containing all of the drawn cards images (on individual canvases). */
-export function drawCards(
+export function drawCards<Canvas, Image>(
   variant: Variant,
   colorblindMode: boolean,
   styleNumbers: boolean,
   enableShadows: boolean,
-  initCanvas: () => { cvs: HTMLCanvasElement; ctx: CanvasRenderingContext2D },
-  cloneCanvas: (
-    oldCvs: HTMLCanvasElement,
-    oldCtx: CanvasRenderingContext2D,
-  ) => HTMLCanvasElement,
-  saveCanvas: (
-    cvs: HTMLCanvasElement,
-    ctx: CanvasRenderingContext2D,
-  ) => HTMLCanvasElement,
-): ReadonlyMap<string, HTMLCanvasElement> {
-  const cardImages = new Map<string, HTMLCanvasElement>();
+  backend: CardRendererBackend<Canvas, Image>,
+): ReadonlyMap<string, Image> {
+  const { createCanvas: initCanvas, cloneCanvas, saveCanvas } = backend;
+  const cardImages = new Map<string, Image>();
 
   // Add the "Unknown" suit to the list of suits for this variant. The unknown suit has blank white
   // cards, representing cards of known rank but unknown suit.
@@ -336,11 +330,11 @@ function drawSuitPips(
   }
 }
 
-function makeUnknownCard(
-  initCanvas: () => { cvs: HTMLCanvasElement; ctx: CanvasRenderingContext2D },
+function makeUnknownCard<Canvas>(
+  initCanvas: () => { cvs: Canvas; ctx: CanvasRenderingContext2D },
   enableShadows: boolean,
 ): {
-  cvs: HTMLCanvasElement;
+  cvs: Canvas;
   ctx: CanvasRenderingContext2D;
 } {
   const { cvs, ctx } = initCanvas();
@@ -369,12 +363,12 @@ function makeUnknownCard(
   };
 }
 
-function makeDeckBack(
+function makeDeckBack<Canvas>(
   variant: Variant,
-  initCanvas: () => { cvs: HTMLCanvasElement; ctx: CanvasRenderingContext2D },
+  initCanvas: () => { cvs: Canvas; ctx: CanvasRenderingContext2D },
   enableShadows: boolean,
 ): {
-  cvs: HTMLCanvasElement;
+  cvs: Canvas;
   ctx: CanvasRenderingContext2D;
 } {
   const { cvs, ctx } = makeUnknownCard(initCanvas, enableShadows);

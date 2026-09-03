@@ -93,9 +93,7 @@ function finishedDownloadingImages() {
     globals.lobby.settings.colorblindMode,
     globals.lobby.settings.styleNumbers,
     true,
-    drawCardsBrowser.initCanvas,
-    drawCardsBrowser.cloneCanvas,
-    drawCardsBrowser.saveCanvas,
+    drawCardsBrowser.cardRendererBackend,
   );
 
   // Draw the user interface.
