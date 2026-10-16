@@ -198,7 +198,7 @@ export function getSoundType(
         }
       }
 
-      if (isOrderChopMove(previousGameState, action, metadata)) {
+      if (isOrderChopMove(previousGameState, gameState, action, metadata)) {
         return SoundType.OrderChopMove;
       }
 
@@ -216,10 +216,10 @@ export function getStandardSoundType(ourTurn: boolean): SoundType {
  * - https://hanabi.github.io/level-3#part-2---the-fresh-1s-rule
  * - https://hanabi.github.io/level-3#part-3---the-chop-focus-exception
  * - https://hanabi.github.io/level-4/#the-order-chop-move-ocm
- * Never consult play-stack progress: it can reveal hidden card information.
  */
 function isOrderChopMove(
   previousGameState: GameState,
+  gameState: GameState,
   action: ActionPlay,
   metadata: GameMetadata,
 ): boolean {
@@ -233,6 +233,28 @@ function isOrderChopMove(
 
   const playedCard = previousGameState.deck[action.order];
   if (playedCard === undefined || !isCandidateOneForOCM(playedCard)) {
+    return false;
+  }
+
+  // Get the number of 1's left to play on the stacks.
+  let numOnesLeftToPlay = 0;
+  for (const [suitIndex, suit] of variant.suits.entries()) {
+    if (suit.reversed) {
+      continue;
+    }
+
+    const playStack = gameState.playStacks[suitIndex];
+    if (playStack !== undefined && playStack.length === 0) {
+      numOnesLeftToPlay++;
+    }
+  }
+
+  // This function is fired after the one has already played, so "numOnesLeftToPlay" needs to be
+  // adjusted by 1.
+  numOnesLeftToPlay++;
+
+  // We can't Order Chop Move if all of the 1s are played or there is only one 1 left to be played.
+  if (numOnesLeftToPlay === 0 || numOnesLeftToPlay === 1) {
     return false;
   }
 
