@@ -279,7 +279,7 @@ describe("hypothetical planning", () => {
       morphedIdentities: [
         undefined,
         undefined,
-        { suitIndex: 0 as SuitIndex, rank: 1 },
+        { suitIndex: 0 as SuitIndex, rank: 1 as const },
       ],
     };
     const actions = planHypotheticalAction(
