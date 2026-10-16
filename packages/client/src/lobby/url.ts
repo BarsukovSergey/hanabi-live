@@ -13,14 +13,16 @@ export function parseAndGoto(data: ServerCommandWelcomeData): void {
     return;
   }
 
-  if (globalThis.location.pathname === "/history") {
-    history.show();
-    return;
-  }
-  if (globalThis.location.pathname === "/history/friends") {
-    history.show();
-    history.showFriends();
-    return;
+  if (globalThis.location.pathname === "/lobby") {
+    if (globalThis.location.hash === "#history") {
+      history.show();
+      return;
+    }
+    if (globalThis.location.hash === "#history-friends") {
+      history.show();
+      history.showFriends();
+      return;
+    }
   }
 
   // Automatically create a table if we are using a "/create-table" URL.

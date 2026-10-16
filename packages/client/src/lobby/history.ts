@@ -39,8 +39,8 @@ export function init(): void {
 
 export function show(): void {
   globals.currentScreen = Screen.History;
-  if (globalThis.location.pathname === "/lobby") {
-    setBrowserAddressBarPath("/history", undefined, "push");
+  if (globalThis.location.pathname === "/lobby" && globalThis.location.hash === "") {
+    setBrowserAddressBarPath("/lobby", "#history", "push");
   }
 
   $("#lobby-history").show();
@@ -216,8 +216,8 @@ function makeOtherScoresButton(id: number, seed: string, gameCount: number) {
 
 export function showFriends(): void {
   globals.currentScreen = Screen.HistoryFriends;
-  if (globalThis.location.pathname === "/history") {
-    setBrowserAddressBarPath("/history/friends", undefined, "push");
+  if (globalThis.location.hash === "#history") {
+    setBrowserAddressBarPath("/lobby", "#history-friends", "push");
   }
   nav.show("history-friends");
   $("#lobby-history-table-players").html("Players");
@@ -227,7 +227,7 @@ export function showFriends(): void {
 
 export function hideFriends(): void {
   globals.currentScreen = Screen.History;
-  setBrowserAddressBarPath("/history", undefined, "push");
+  setBrowserAddressBarPath("/lobby", "#history", "push");
   nav.show("history");
   $("#lobby-history-table-players").html("Other Players");
   $("#lobby-history-show-all").show();

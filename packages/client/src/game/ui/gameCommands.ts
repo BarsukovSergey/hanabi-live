@@ -491,13 +491,13 @@ function setURL(data: InitData) {
       data.shadowing ? `/shadow/${data.ourPlayerIndex}` : ""
     }`;
   }
+  const hash = /^#\d+$/u.test(globalThis.location.hash)
+    ? globalThis.location.hash
+    : "";
   setBrowserAddressBarPath(
     path,
-    globalThis.location.hash,
-    globalThis.location.pathname === "/lobby"
-      || globalThis.location.pathname.startsWith("/history")
-      ? "push"
-      : "replace",
+    hash,
+    globalThis.location.pathname === "/lobby" ? "push" : "replace",
   );
 }
 
