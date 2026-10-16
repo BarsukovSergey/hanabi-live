@@ -7,6 +7,8 @@ jobs:
   inspect:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/workflows/setup
       - name: Fetch public replay
         run: |
           curl -fsSL --max-time 25 -o /tmp/hanabi-replay.json 'https://hanab.live/export/1580957'
@@ -22,3 +24,5 @@ jobs:
                   if isinstance(v,list):print(k,'length',len(v),'first',str(v[:2])[:450])
                   else:print(k,str(v)[:260])
           PY
+      - name: Run replay-state diagnostic
+        run: npm test -- --runInBand packages/client/src/game/ui/reactive/replay1580957.debug.test.ts
