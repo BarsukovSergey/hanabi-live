@@ -1,9 +1,9 @@
 import type { ServerCommandWelcomeData } from "@hanabi-live/data";
 import { afterEach, describe, expect, jest, test } from "@jest/globals";
 import { globals } from "../Globals";
+import * as history from "./history";
 import type { GameJSON } from "./hypoCompress";
 import { expand } from "./hypoCompress";
-import * as history from "./history";
 import { parseAndGoto } from "./url";
 
 jest.mock("./history", () => ({
