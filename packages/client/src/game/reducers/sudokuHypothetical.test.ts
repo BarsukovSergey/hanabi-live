@@ -1,6 +1,7 @@
 import type {
   CardIdentity,
   CardOrder,
+  CardState,
   GameState,
   PlanHypotheticalActionContext,
 } from "@hanabi-live/game";
@@ -71,9 +72,12 @@ describe("Sudoku hypothetical from public game 1663033 (issue #3040)", () => {
         `Missing current player at segment ${segment}.`,
       );
 
-      for (const order of gameState.hands[playerIndex]) {
+      const hand = gameState.hands[playerIndex];
+      assertDefined(hand, `Missing hand at segment ${segment}.`);
+
+      for (const order of hand) {
         for (const type of ["play", "discard"] as const) {
-          const card = gameState.deck[order];
+          const card: CardState | undefined = gameState.deck[order];
           assertDefined(card, `Missing card ${order}.`);
           const context: PlanHypotheticalActionContext = {
             gameState,
@@ -121,4 +125,103 @@ describe("Sudoku hypothetical from public game 1663033 (issue #3040)", () => {
       }
     },
   );
+  test("rejects a deck card already drawn to the other player's hand", () => {
+    const gameState = replay.replay.states[59];
+    assertDefined(gameState, "Missing replay segment 59.");
+    let hypothetical = initializeHypotheticalState(
+      gameState,
+      false,
+      [],
+      true,
+      metadata,
+    );
+
+    const intents = [
+      { type: "colorClue", target: 0, value: 3 },
+      { type: "colorClue", target: 1, value: 1 },
+      { type: "rankClue", target: 0, value: 4 },
+      { type: "colorClue", target: 1, value: 0 },
+      { type: "play", order: 6 },
+      { type: "play", order: 47 },
+    ] as const;
+
+    for (const intent of intents) {
+      const ongoing = hypothetical.ongoing;
+      const orders =
+        intent.type === "play"
+          ? [intent.order]
+          : ongoing.hands[intent.target];
+      assertDefined(orders, "Missing target hand.");
+      const cardViews = orders.map((order) => {
+        const state: CardState | undefined = ongoing.deck[order];
+        const identity = cardIdentities[order];
+        assertDefined(state, `Missing card ${order}.`);
+        assertDefined(identity, `Missing identity ${order}.`);
+        return {
+          state,
+          isStackBase: false,
+          visibleSuitIndex: identity.suitIndex,
+          visibleRank: identity.rank,
+        };
+      });
+
+      const planned = planHypotheticalAction(
+        intent,
+        {
+          gameState: ongoing,
+          metadata,
+          variant,
+          cardIdentities,
+          morphedIdentities: hypothetical.morphedIdentities,
+          notes,
+          playing: false,
+          cardViews,
+        } as PlanHypotheticalActionContext,
+      );
+      expect(planned).not.toBeNull();
+      for (const action of planned ?? []) {
+        hypothetical = hypotheticalStateReducer(
+          hypothetical,
+          action,
+          true,
+          metadata,
+        );
+        expectConsistentCollections(hypothetical.ongoing);
+      }
+    }
+
+    const after = hypothetical.ongoing;
+    expect(after.cardsRemainingInTheDeck).toBe(0);
+    expect(after.turn.currentPlayerIndex).toBe(1);
+    expect(after.hands[0]).toContain(49);
+    expect(after.hands[1]).not.toContain(49);
+
+    // Card 49 is no longer in the deck. Its actual identity is Green 2, but it
+    // can be morphed to Red 4. Playing it as player 1 would duplicate it in
+    // player 0's hand and a play/discard stack, desynchronizing the UI.
+    const card = after.deck[49];
+    assertDefined(card, "Missing the final card.");
+    const morphedIdentities: Array<CardIdentity | undefined> = [];
+    morphedIdentities[49] = { suitIndex: 0, rank: 4 };
+    const invalidPlan = planHypotheticalAction(
+      { type: "play", order: 49 as CardOrder },
+      {
+        gameState: after,
+        metadata,
+        variant,
+        cardIdentities,
+        morphedIdentities,
+        notes,
+        playing: false,
+        cardViews: [{
+          state: card,
+          isStackBase: false,
+          visibleSuitIndex: null,
+          visibleRank: null,
+        }],
+      },
+    );
+    expect(invalidPlan).toBeNull();
+  });
+
 });
