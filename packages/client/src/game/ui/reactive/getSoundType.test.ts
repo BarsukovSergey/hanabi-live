@@ -10,13 +10,13 @@ import { getSoundType } from "./getSoundType";
 
 function makeOne(order: number, suitIndex: number): CardState {
   return {
-      order,
-      suitIndex,
-      rank: 1,
-      numPositiveClues: 1,
-      positiveRankClues: [1],
-      positiveColorClues: [],
-      dealtToStartingHand: true,
+    order,
+    suitIndex,
+    rank: 1,
+    numPositiveClues: 1,
+    positiveRankClues: [1],
+    positiveColorClues: [],
+    dealtToStartingHand: true,
   } as unknown as CardState;
 }
 
@@ -28,22 +28,25 @@ describe("OCM sound, replay 1580957 turn 7", () => {
     ourPlayerIndex: 0,
   } as GameMetadata;
 
-  test("plays the OCM sound when a newer clued starting 1 skips an older trash 1", () => {
-    const previous = {
-      deck: [skippedRedOne, undefined, undefined, undefined, playedBlueOne],
-      hands: [[4, 0]],
-      stats: { maxScore: 25 },
-    } as unknown as GameState;
-    const current = {
-      deck: previous.deck,
-      turn: { currentPlayerIndex: 1 },
-      stats: { maxScore: 25, numSubsequentBlindPlays: 0 },
-      playStacks: [[1], [1], [1], [1], []],
-    } as unknown as GameState;
-    const action = { type: "play", order: 4, playerIndex: 0 } as ActionPlay;
+  test.each([true, false])(
+    "plays OCM when a newer clued starting 1 skips an older 1 (trash: %s)",
+    (skippedIsTrash) => {
+      const previous = {
+        deck: [skippedRedOne, undefined, undefined, undefined, playedBlueOne],
+        hands: [[4, 0]],
+        stats: { maxScore: 25 },
+      } as unknown as GameState;
+      const current = {
+        deck: previous.deck,
+        turn: { currentPlayerIndex: 1 },
+        stats: { maxScore: 25, numSubsequentBlindPlays: 0 },
+        playStacks: [skippedIsTrash ? [1] : [], [1], [1], [1], []],
+      } as unknown as GameState;
+      const action = { type: "play", order: 4, playerIndex: 0 } as ActionPlay;
 
-    expect(getSoundType(previous, current, action, metadata)).toBe(
-      SoundType.OrderChopMove,
-    );
-  });
+      expect(getSoundType(previous, current, action, metadata)).toBe(
+        SoundType.OrderChopMove,
+      );
+    },
+  );
 });
