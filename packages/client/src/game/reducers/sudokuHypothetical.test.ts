@@ -1,4 +1,9 @@
-import type { CardIdentity, CardOrder, GameState, PlanHypotheticalActionContext } from "@hanabi-live/game";
+import type {
+  CardIdentity,
+  CardOrder,
+  GameState,
+  PlanHypotheticalActionContext,
+} from "@hanabi-live/game";
 import {
   getVariant,
   hypotheticalStateReducer,
@@ -61,7 +66,10 @@ describe("Sudoku hypothetical from public game 1663033 (issue #3040)", () => {
       const gameState = replay.replay.states[segment];
       assertDefined(gameState, `Missing replay segment ${segment}.`);
       const playerIndex = gameState.turn.currentPlayerIndex;
-      assertNotNull(playerIndex, `Missing current player at segment ${segment}.`);
+      assertNotNull(
+        playerIndex,
+        `Missing current player at segment ${segment}.`,
+      );
 
       for (const order of gameState.hands[playerIndex]) {
         for (const type of ["play", "discard"] as const) {
@@ -75,12 +83,14 @@ describe("Sudoku hypothetical from public game 1663033 (issue #3040)", () => {
             morphedIdentities: [],
             notes,
             playing: false,
-            cardViews: [{
-              state: card,
-              isStackBase: false,
-              visibleSuitIndex: null,
-              visibleRank: null,
-            }],
+            cardViews: [
+              {
+                state: card,
+                isStackBase: false,
+                visibleSuitIndex: null,
+                visibleRank: null,
+              },
+            ],
           };
           const actions = planHypotheticalAction(
             { type, order: order as CardOrder },

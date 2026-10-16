@@ -1,0 +1,38 @@
+name: Inspect Sudoku 3040 issue screenshots
+
+on:
+  push:
+    paths:
+      - ".github/workflows/inspect-sudoku-3040.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  public-screenshots:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Retrieve public images at readable scale
+        run: |
+          python3 -m venv /tmp/sudoku-pics
+          /tmp/sudoku-pics/bin/pip install --quiet Pillow
+          /tmp/sudoku-pics/bin/python - <<'PY'
+          import base64
+          from io import BytesIO
+          from urllib.request import Request, urlopen
+          from PIL import Image
+          urls = [
+              "https://github.com/user-attachments/assets/0e34160e-cf08-411d-880b-ea8d3b6aaf88",
+              "https://github.com/user-attachments/assets/f81557ed-0a36-48e0-b6fe-a5f010aec0c5",
+          ]
+          for i, url in enumerate(urls):
+              req = Request(url, headers={"User-Agent": "Hanabi-Live debugging"})
+              with urlopen(req, timeout=30) as response:
+                  raw = response.read(8000000)
+              im = Image.open(BytesIO(raw)).convert("RGB")
+              print("ORIGINAL_SIZE", i, im.size)
+              im.thumbnail((1400, 900))
+              buf = BytesIO()
+              im.save(buf, format="JPEG", quality=70, optimize=True)
+              print("ISSUE_PICTURE_" + str(i), base64.b64encode(buf.getvalue()).decode("ascii"))
+          PY

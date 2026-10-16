@@ -1,8 +1,5 @@
 {
-  "players": [
-    "Player0",
-    "Player1"
-  ],
+  "players": ["Player0", "Player1"],
   "deck": [
     {
       "suitIndex": 4,
