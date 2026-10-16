@@ -1,0 +1,22 @@
+name: Temporary replay inspect
+on:
+  push:
+    branches:
+      - ci/replay-1580957-inspect
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch public replay
+        run: |
+          curl -fsSL --max-time 25 -o /tmp/hanabi-replay.json 'https://hanab.live/export/1580957'
+          python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/hanabi-replay.json'))
+          print('type:',type(d).__name__)
+          if isinstance(d,dict):
+              print('keys:',list(d))
+              for k,v in d.items():
+                  if isinstance(v,list):print(k,'length',len(v),'first',str(v[:2])[:450])
+                  else:print(k,str(v)[:260])
+          PY
