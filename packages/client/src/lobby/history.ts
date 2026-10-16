@@ -203,11 +203,15 @@ function makeOtherScoresButton(id: number, seed: string, gameCount: number) {
     button.addClass("disabled");
   } else {
     button.on("click", () => {
-      globals.conn!.send("historyGetSeed", {
-        seed,
-        friends: globals.currentScreen === Screen.HistoryFriends,
-      });
+      const friends = globals.currentScreen === Screen.HistoryFriends;
+      globals.conn!.send("historyGetSeed", { seed, friends });
       showOtherScores();
+      const friendPrefix = friends ? "friends-" : "";
+      setBrowserAddressBarPath(
+        "/lobby",
+        `#history-other-scores-${friendPrefix}${encodeURIComponent(seed)}`,
+        "push",
+      );
     });
   }
 
@@ -234,6 +238,11 @@ export function hideFriends(): void {
   draw(false);
 }
 
+export function showOtherScoresFromURL(seed: string, friends: boolean): void {
+  globals.conn!.send("historyGetSeed", { seed, friends });
+  showOtherScores();
+}
+
 function showOtherScores() {
   globals.currentScreen = Screen.HistoryOtherScores;
   $("#lobby-history").hide();
@@ -243,6 +252,7 @@ function showOtherScores() {
 
 function hideOtherScores() {
   globals.currentScreen = Screen.History;
+  setBrowserAddressBarPath("/lobby", "#history", "push");
   $("#lobby-history").show();
   $("#lobby-history-other-scores").hide();
   nav.show("history");
@@ -250,6 +260,7 @@ function hideOtherScores() {
 
 function hideOtherScoresToFriends() {
   globals.currentScreen = Screen.HistoryFriends;
+  setBrowserAddressBarPath("/lobby", "#history-friends", "push");
   $("#lobby-history").show();
   $("#lobby-history-other-scores").hide();
   nav.show("history-friends");

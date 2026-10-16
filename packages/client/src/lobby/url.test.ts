@@ -6,7 +6,11 @@ import { expand } from "./hypoCompress";
 import * as history from "./history";
 import { parseAndGoto } from "./url";
 
-jest.mock("./history", () => ({ show: jest.fn(), showFriends: jest.fn() }));
+jest.mock("./history", () => ({
+  show: jest.fn(),
+  showFriends: jest.fn(),
+  showOtherScoresFromURL: jest.fn(),
+}));
 jest.mock("../Globals", () => ({ globals: { conn: { send: jest.fn() } } }));
 jest.mock("../utils", () => ({ setBrowserAddressBarPath: jest.fn() }));
 
@@ -85,6 +89,22 @@ describe("replay URL loading", () => {
 
     expect(show).toHaveBeenCalledTimes(1);
     expect(showFriends).toHaveBeenCalledTimes(friends ? 1 : 0);
+  });
+
+  test("restores the other scores history route", () => {
+    const show = jest.spyOn(history, "show");
+    const showFriends = jest.spyOn(history, "showFriends");
+    const showOtherScores = jest.spyOn(history, "showOtherScoresFromURL");
+    Object.defineProperty(globalThis, "location", {
+      configurable: true,
+      value: new URL("https://hanab.live/lobby#history-other-scores-friends-p4v0s1"),
+    });
+
+    parseAndGoto({ firstTimeUser: false } as ServerCommandWelcomeData);
+
+    expect(show).toHaveBeenCalledTimes(1);
+    expect(showFriends).toHaveBeenCalledTimes(1);
+    expect(showOtherScores).toHaveBeenCalledWith("p4v0s1", true);
   });
 
   test.each([

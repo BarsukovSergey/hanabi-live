@@ -14,6 +14,21 @@ export function parseAndGoto(data: ServerCommandWelcomeData): void {
   }
 
   if (globalThis.location.pathname === "/lobby") {
+    const scoresMatch = /^#history-other-scores-(friends-)?(.+)$/u.exec(
+      globalThis.location.hash,
+    );
+    if (scoresMatch !== null) {
+      const friends = scoresMatch[1] !== undefined;
+      const seed = scoresMatch[2];
+      if (seed !== undefined) {
+        history.show();
+        if (friends) {
+          history.showFriends();
+        }
+        history.showOtherScoresFromURL(decodeURIComponent(seed), friends);
+        return;
+      }
+    }
     if (globalThis.location.hash === "#history") {
       history.show();
       return;
