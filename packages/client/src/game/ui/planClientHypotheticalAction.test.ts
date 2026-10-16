@@ -15,7 +15,9 @@ import {
 } from "@hanabi-live/game";
 import { describe, expect, jest, test } from "@jest/globals";
 import { initialState } from "../reducers/initialStates/initialState";
+import { stateReducer } from "../reducers/stateReducer";
 import { ActionType } from "../types/ActionType";
+import type { Action } from "../types/actions";
 import { globals } from "./UIGlobals";
 import { getCardOrStackBase } from "./getCardOrStackBase";
 import { sendHypotheticalAction } from "./hypothetical";
@@ -258,4 +260,75 @@ describe("client hypothetical planning", () => {
       ),
     ).toBeNull();
   });
+  test.each([
+    ["play", ActionType.Play],
+    ["discard", ActionType.Discard],
+  ] as const)(
+    "applies a face-down spectator hypothetical %s through the client and replay reducers",
+    (actionType, clientActionType) => {
+      const context = makeContext();
+      const initial = initialState(context.metadata);
+      let storeState = stateReducer(
+        {
+          ...initial,
+          playing: false,
+          ongoingGame: context.gameState,
+          visibleState: context.gameState,
+          cardIdentities: context.cardIdentities,
+          replay: {
+            ...initial.replay,
+            active: true,
+            segment: 4,
+            states: Array.from({ length: 5 }, () => context.gameState),
+          },
+        },
+        { type: "hypoStart", showDrawnCards: false, actions: [] },
+      );
+      const sentActions: GameAction[] = [];
+      const dispatch = jest.fn((action: Action) => {
+        storeState = stateReducer(storeState, action);
+        if (action.type === "hypoAction") {
+          sentActions.push(action.action);
+        }
+        Object.assign(globals, { state: storeState });
+      });
+      const faceDownCard = {
+        state: context.gameState.deck[0]!,
+        isStackBase: false,
+        visibleSuitIndex: null,
+        visibleRank: null,
+      };
+      Object.assign(globals, {
+        metadata: context.metadata,
+        variant: context.variant,
+        deck: [faceDownCard],
+        state: storeState,
+        store: { dispatch },
+      });
+
+      expect(storeState.playing).toBe(false);
+      expect(faceDownCard.visibleSuitIndex).toBeNull();
+      expect(faceDownCard.visibleRank).toBeNull();
+      expect(context.cardIdentities[0]).toEqual({ suitIndex: 0, rank: 1 });
+
+      sendHypotheticalAction({
+        type: clientActionType,
+        target: 0 as CardOrder,
+      });
+
+      expect(sentActions.map((action) => action.type)).toEqual([
+        actionType,
+        "draw",
+        "turn",
+      ]);
+      expect(storeState.replay.hypothetical?.ongoing.deck[0]?.location).toBe(
+        actionType === "play" ? "playStack" : "discard",
+      );
+      expect(storeState.visibleState).toEqual(
+        storeState.replay.hypothetical?.ongoing,
+      );
+      expect(storeState.visibleState?.turn.currentPlayerIndex).toBe(1);
+    },
+  );
+
 });
