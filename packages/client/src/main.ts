@@ -12,20 +12,20 @@ import * as game from "./game/main";
 import { backToLobby } from "./game/ui/backToLobby";
 import * as lobbyCreateGame from "./lobby/createGame";
 import * as lobbyHistory from "./lobby/history";
-import * as lobbyPregame from "./lobby/pregame";
 import { lobbyIdleInit } from "./lobby/lobbyIdleInit";
 import { lobbyKeyboardInit } from "./lobby/lobbyKeyboardInit";
 import { lobbyTutorialInit } from "./lobby/lobbyTutorialInit";
 import * as lobbyLogin from "./lobby/login";
 import * as lobbyNav from "./lobby/nav";
+import * as lobbyPregame from "./lobby/pregame";
 import * as playerSettings from "./lobby/playerSettings";
 import { Screen } from "./lobby/types/Screen";
 import * as lobbyWatchReplay from "./lobby/watchReplay";
 import * as modals from "./modals";
 import * as sounds from "./sounds";
 import * as theme from "./theme";
-import { setBrowserAddressBarPath } from "./utils";
 import * as tooltips from "./tooltips";
+import { setBrowserAddressBarPath } from "./utils";
 
 // Initialize jQuery:
 // https://stackoverflow.com/questions/56457935/typescript-error-property-x-does-not-exist-on-type-window
@@ -67,7 +67,14 @@ $(document).ready(() => {
     }
 
     if (hash.startsWith("#history")) {
-      lobbyHistory.show();
+      if (
+        hash === "#history"
+        && globals.currentScreen === Screen.HistoryFriends
+      ) {
+        lobbyHistory.hideFriends();
+      } else {
+        lobbyHistory.show();
+      }
       if (hash === "#history-friends") {
         lobbyHistory.showFriends();
       } else if (hash.startsWith("#history-other-scores-")) {
@@ -77,7 +84,10 @@ $(document).ready(() => {
           if (friends) {
             lobbyHistory.showFriends();
           }
-          lobbyHistory.showOtherScoresFromURL(decodeURIComponent(match[2]), friends);
+          lobbyHistory.showOtherScoresFromURL(
+            decodeURIComponent(match[2]),
+            friends,
+          );
         }
       }
     } else if (
