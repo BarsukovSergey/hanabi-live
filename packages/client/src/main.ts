@@ -56,7 +56,7 @@ $(document).ready(() => {
       return;
     }
 
-    const hash = globalThis.location.hash;
+    const { hash } = globalThis.location;
     if (globals.currentScreen === Screen.Game) {
       backToLobby();
       setBrowserAddressBarPath("/lobby", hash);
