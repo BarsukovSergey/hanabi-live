@@ -66,7 +66,11 @@ export function show(): void {
   toggleJoinSpectateButtons();
 
   // Set the browser address bar.
-  setBrowserAddressBarPath(`/pre-game/${globals.tableID}`);
+  setBrowserAddressBarPath(
+    `/pre-game/${globals.tableID}`,
+    undefined,
+    globalThis.location.pathname === "/lobby" ? "push" : "replace",
+  );
 }
 
 export function hide(): void {

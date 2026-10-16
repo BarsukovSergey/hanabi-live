@@ -47,6 +47,12 @@ if (
 initErrorListener();
 
 $(document).ready(() => {
+  // A history entry changes the URL, but does not re-run the route loader.
+  // Reload to restore the matching lobby or pregame screen and server connection.
+  globalThis.addEventListener("popstate", () => {
+    globalThis.location.reload();
+  });
+
   // Set an event handler for when the entire window loses focus.
   $(globalThis).blur(() => {
     if (globals.currentScreen === Screen.Game && globals.ui !== null) {
