@@ -6,7 +6,7 @@ import {
   planHypotheticalAction,
 } from "@hanabi-live/game";
 import { describe, expect, test } from "@jest/globals";
-import { assertDefined } from "complete-common";
+import { assertDefined, assertNotNull } from "complete-common";
 import { loadGameJSON } from "../../../test/loadGameJSON";
 import sudokuGame from "../../../test_data/sudoku_hypothetical_1663033.json";
 import { initialState } from "./initialStates/initialState";
@@ -61,7 +61,7 @@ describe("Sudoku hypothetical from public game 1663033 (issue #3040)", () => {
       const gameState = replay.replay.states[segment];
       assertDefined(gameState, `Missing replay segment ${segment}.`);
       const playerIndex = gameState.turn.currentPlayerIndex;
-      assertDefined(playerIndex, `Missing current player at segment ${segment}.`);
+      assertNotNull(playerIndex, `Missing current player at segment ${segment}.`);
 
       for (const order of gameState.hands[playerIndex]) {
         for (const type of ["play", "discard"] as const) {

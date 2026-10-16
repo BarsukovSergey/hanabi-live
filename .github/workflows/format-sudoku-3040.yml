@@ -1,0 +1,28 @@
+name: Format Sudoku 3040 diagnostic files
+
+on:
+  push:
+    paths:
+      - ".github/workflows/format-sudoku-3040.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/workflows/setup
+      - name: Print formatted diagnostic files
+        run: |
+          npx prettier --write packages/client/src/game/reducers/sudokuHypothetical.test.ts packages/client/test_data/sudoku_hypothetical_1663033.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          for tag, path in [
+              ("TS", "packages/client/src/game/reducers/sudokuHypothetical.test.ts"),
+              ("JSON", "packages/client/test_data/sudoku_hypothetical_1663033.json"),
+          ]:
+              print("FORMATTED_" + tag + " " + json.dumps(Path(path).read_text()))
+          PY
