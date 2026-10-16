@@ -198,7 +198,7 @@ export function getSoundType(
         }
       }
 
-      if (isOrderChopMove(previousGameState, gameState, action, metadata)) {
+      if (isOrderChopMove(previousGameState, action, metadata)) {
         return SoundType.OrderChopMove;
       }
 
@@ -216,10 +216,10 @@ export function getStandardSoundType(ourTurn: boolean): SoundType {
  * - https://hanabi.github.io/level-3#part-2---the-fresh-1s-rule
  * - https://hanabi.github.io/level-3#part-3---the-chop-focus-exception
  * - https://hanabi.github.io/level-4/#the-order-chop-move-ocm
+ * Never consult play-stack progress: it can reveal hidden card information.
  */
 function isOrderChopMove(
   previousGameState: GameState,
-  gameState: GameState,
   action: ActionPlay,
   metadata: GameMetadata,
 ): boolean {
@@ -235,9 +235,6 @@ function isOrderChopMove(
   if (playedCard === undefined || !isCandidateOneForOCM(playedCard)) {
     return false;
   }
-
-  // The number of unplayed 1s is hidden information. Do not use it to decide whether
-  // the OCM sound should play, since that can reveal whether a clued card is trash.
 
   // Find out if there are any other candidate 1s in the hand.
   const playerHand = previousGameState.hands[action.playerIndex];

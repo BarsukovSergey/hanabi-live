@@ -37,9 +37,9 @@ describe("OCM sound", () => {
   } as ActionPlay;
 
   test.each([
-    ["only one playable 1 remains", [1, 1, 1, 1, 0]],
-    ["multiple playable 1s remain", [1, 1, 0, 0, 0]],
-  ])("plays OCM when a newer clued 1 is played and %s", (_name, lengths) => {
+    ["only one playable 1 remains", 4],
+    ["multiple playable 1s remain", 2],
+  ])("plays OCM when a newer clued 1 is played and %s", (_name, finishedStacks) => {
     const previous = {
       deck: [olderOne, newerOne],
       hands: [[0, 1]],
@@ -50,7 +50,9 @@ describe("OCM sound", () => {
       hands: [[0]],
       stats: { maxScore: 25 },
       turn: { currentPlayerIndex: 1 },
-      playStacks: lengths.map((length) => Array.from({ length })),
+      playStacks: Array.from({ length: 5 }, (_, index) =>
+        index < finishedStacks ? [1] : [],
+      ),
     } as unknown as GameState;
 
     expect(getSoundType(previous, current, action, metadata)).toBe(
