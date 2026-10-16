@@ -77,7 +77,11 @@ export function setBrowserAddressBarPath(
     // e.g. "#123", which is used to show the current turn
     path += hash;
   }
-  if (historyMode === "push" && path !== `${globalThis.location.pathname}${globalThis.location.search}${globalThis.location.hash}`) {
+  if (
+    historyMode === "push"
+    && path
+      !== `${globalThis.location.pathname}${globalThis.location.search}${globalThis.location.hash}`
+  ) {
     globalThis.history.pushState(undefined, "", path);
   } else {
     globalThis.history.replaceState(undefined, "", path);

@@ -2,14 +2,8 @@ import { afterEach, describe, expect, jest, test } from "@jest/globals";
 import { setBrowserAddressBarPath } from "./utils";
 
 describe("setBrowserAddressBarPath", () => {
-  const originalLocation = Object.getOwnPropertyDescriptor(
-    globalThis,
-    "location",
-  );
-  const originalHistory = Object.getOwnPropertyDescriptor(
-    globalThis,
-    "history",
-  );
+  const originalLocation = Object.getOwnPropertyDescriptor(globalThis, "location");
+  const originalHistory = Object.getOwnPropertyDescriptor(globalThis, "history");
 
   afterEach(() => {
     if (originalLocation === undefined) {
@@ -61,11 +55,7 @@ describe("setBrowserAddressBarPath", () => {
     setBrowserAddressBarPath("/pre-game/123", undefined, "push");
 
     expect(pushState).not.toHaveBeenCalled();
-    expect(replaceState).toHaveBeenCalledWith(
-      undefined,
-      "",
-      "/pre-game/123",
-    );
+    expect(replaceState).toHaveBeenCalledWith(undefined, "", "/pre-game/123");
   });
 
   test("turn-number updates keep replacing the active entry", () => {
