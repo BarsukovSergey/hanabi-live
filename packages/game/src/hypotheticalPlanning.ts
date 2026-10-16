@@ -306,10 +306,21 @@ export function planHypotheticalAction(
       ? getCharacterNameForPlayer(playerIndex, metadata.characterAssignments)
       : "";
     const characterMetadata = metadata.characterMetadata[playerIndex];
+    const targetCharacterName = metadata.options.detrimentalCharacters
+      ? getCharacterNameForPlayer(intent.target, metadata.characterAssignments)
+      : "";
     if (
-      characterName === "Fuming"
-      && clue.type === ClueType.Color
-      && clue.value !== characterMetadata
+      (characterName === "Fuming"
+        && clue.type === ClueType.Color
+        && clue.value !== characterMetadata)
+      || (characterName === "Dumbfounded"
+        && clue.type === ClueType.Rank
+        && clue.value !== characterMetadata)
+      || (targetCharacterName === "Color-Blind"
+        && clue.type === ClueType.Color)
+      || (targetCharacterName === "Vulnerable"
+        && clue.type === ClueType.Rank
+        && (clue.value === 2 || clue.value === 5))
     ) {
       return null;
     }
@@ -324,18 +335,20 @@ export function planHypotheticalAction(
       }
       targetCards.push(card);
     }
-    if (characterName === "Inept") {
+    if (characterName === "Inept" || characterName === "Awkward") {
       const fullClue = msgClueToClue(clue, variant);
-      const touchesForbiddenSuit = targetCards.some(({ identity }) => {
+      const touchesForbiddenCard = targetCards.some(({ identity }) => {
         const { suitIndex, rank } = identity;
         return (
           suitIndex !== null
           && rank !== null
-          && suitIndex === characterMetadata
           && isCardTouchedByClue(variant, fullClue, suitIndex, rank)
+          && (characterName === "Inept"
+            ? suitIndex === characterMetadata
+            : rank === characterMetadata)
         );
       });
-      if (touchesForbiddenSuit) {
+      if (touchesForbiddenCard) {
         return null;
       }
     }

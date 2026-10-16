@@ -757,6 +757,126 @@ describe("hypothetical planning", () => {
     ).toBe("clue");
   });
 
+  test("Dumbfounded can only give rank clues matching their assigned rank", () => {
+    const context = makeContext();
+    const restricted = {
+      ...context,
+      metadata: {
+        ...context.metadata,
+        options: { ...context.metadata.options, detrimentalCharacters: true },
+        characterAssignments: [1, null],
+        characterMetadata: [2, -1],
+      },
+    } as PlanHypotheticalActionContext;
+
+    expect(
+      planHypotheticalAction(
+        { type: "rankClue", target: 1, value: 1 },
+        restricted,
+      ),
+    ).toBeNull();
+    expect(
+      planHypotheticalAction(
+        { type: "rankClue", target: 1, value: 2 },
+        restricted,
+      )?.[0]?.type,
+    ).toBe("clue");
+    expect(
+      planHypotheticalAction(
+        { type: "colorClue", target: 1, value: 0 as ColorIndex },
+        restricted,
+      )?.[0]?.type,
+    ).toBe("clue");
+  });
+
+  test("Awkward cannot give clues touching cards of their forbidden rank", () => {
+    const context = makeContext();
+    const restricted = {
+      ...context,
+      metadata: {
+        ...context.metadata,
+        options: { ...context.metadata.options, detrimentalCharacters: true },
+        characterAssignments: [3, null],
+        characterMetadata: [1, -1],
+      },
+      cardIdentities: [
+        context.cardIdentities[0]!,
+        { suitIndex: 0, rank: 1 },
+      ],
+    } as PlanHypotheticalActionContext;
+
+    expect(
+      planHypotheticalAction(
+        { type: "colorClue", target: 1, value: 0 as ColorIndex },
+        restricted,
+      ),
+    ).toBeNull();
+    expect(
+      planHypotheticalAction(
+        { type: "rankClue", target: 1, value: 1 },
+        restricted,
+      ),
+    ).toBeNull();
+    expect(
+      planHypotheticalAction(
+        { type: "colorClue", target: 1, value: 1 as ColorIndex },
+        restricted,
+      )?.[0]?.type,
+    ).toBe("clue");
+  });
+
+  test("Vulnerable cannot receive number 2 or 5 clues", () => {
+    const context = makeContext();
+    const restricted = {
+      ...context,
+      metadata: {
+        ...context.metadata,
+        options: { ...context.metadata.options, detrimentalCharacters: true },
+        characterAssignments: [null, 14],
+      },
+    } as PlanHypotheticalActionContext;
+
+    for (const value of [2, 5] as const) {
+      expect(
+        planHypotheticalAction(
+          { type: "rankClue", target: 1, value },
+          restricted,
+        ),
+      ).toBeNull();
+    }
+    expect(
+      planHypotheticalAction(
+        { type: "rankClue", target: 1, value: 1 },
+        restricted,
+      )?.[0]?.type,
+    ).toBe("clue");
+  });
+
+  test("Color-Blind cannot receive color clues", () => {
+    const context = makeContext();
+    const restricted = {
+      ...context,
+      metadata: {
+        ...context.metadata,
+        options: { ...context.metadata.options, detrimentalCharacters: true },
+        characterAssignments: [null, 15],
+      },
+    } as PlanHypotheticalActionContext;
+
+    expect(
+      planHypotheticalAction(
+        { type: "colorClue", target: 1, value: 0 as ColorIndex },
+        restricted,
+      ),
+    ).toBeNull();
+    expect(
+      planHypotheticalAction(
+        { type: "rankClue", target: 1, value: 1 },
+        restricted,
+      )?.[0]?.type,
+    ).toBe("clue");
+  });
+
   test("detrimental character restrictions do not apply when disabled", () => {
     const context = makeContext();
     const unrestricted = {
