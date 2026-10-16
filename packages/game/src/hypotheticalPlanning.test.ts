@@ -690,4 +690,89 @@ describe("hypothetical planning", () => {
       ),
     ).toBeNull();
   });
+
+  test("Fuming can only give color clues matching their assigned color", () => {
+    const context = makeContext();
+    const metadataWithFuming = {
+      ...context.metadata,
+      options: { ...context.metadata.options, detrimentalCharacters: true },
+      characterAssignments: [0, null],
+      characterMetadata: [0, -1],
+    } as typeof context.metadata;
+    const restricted = { ...context, metadata: metadataWithFuming };
+
+    expect(
+      planHypotheticalAction(
+        { type: "colorClue", target: 1, value: 1 as ColorIndex },
+        restricted,
+      ),
+    ).toBeNull();
+    expect(
+      planHypotheticalAction(
+        { type: "colorClue", target: 1, value: 0 as ColorIndex },
+        restricted,
+      )?.[0]?.type,
+    ).toBe("clue");
+    expect(
+      planHypotheticalAction(
+        { type: "rankClue", target: 1, value: 1 },
+        restricted,
+      )?.[0]?.type,
+    ).toBe("clue");
+  });
+
+  test("Inept cannot clue a card of their forbidden suit", () => {
+    const context = makeContext();
+    const restricted = {
+      ...context,
+      metadata: {
+        ...context.metadata,
+        options: { ...context.metadata.options, detrimentalCharacters: true },
+        characterAssignments: [2, null],
+        characterMetadata: [0, -1],
+      },
+      cardIdentities: [
+        context.cardIdentities[0]!,
+        { suitIndex: 0 as SuitIndex, rank: 1 as const },
+      ],
+    } as PlanHypotheticalActionContext;
+
+    expect(
+      planHypotheticalAction(
+        { type: "colorClue", target: 1, value: 0 as ColorIndex },
+        restricted,
+      ),
+    ).toBeNull();
+    expect(
+      planHypotheticalAction(
+        { type: "rankClue", target: 1, value: 1 },
+        restricted,
+      ),
+    ).toBeNull();
+    expect(
+      planHypotheticalAction(
+        { type: "colorClue", target: 1, value: 1 as ColorIndex },
+        restricted,
+      )?.[0]?.type,
+    ).toBe("clue");
+  });
+
+  test("detrimental character restrictions do not apply when disabled", () => {
+    const context = makeContext();
+    const unrestricted = {
+      ...context,
+      metadata: {
+        ...context.metadata,
+        characterAssignments: [0, null],
+        characterMetadata: [0, -1],
+      },
+    } as PlanHypotheticalActionContext;
+
+    expect(
+      planHypotheticalAction(
+        { type: "colorClue", target: 1, value: 1 as ColorIndex },
+        unrestricted,
+      )?.[0]?.type,
+    ).toBe("clue");
+  });
 });
