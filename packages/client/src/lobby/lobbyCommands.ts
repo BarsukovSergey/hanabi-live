@@ -354,7 +354,10 @@ lobbyCommands.set("welcome", (data: ServerCommandWelcomeData) => {
     && globalThis.location.pathname === "/lobby"
     && data.playingAtTables.length === 0
   ) {
-    if (data.disconSpectatingTable !== undefined && data.disconSpectatingTable > 0) {
+    if (
+      data.disconSpectatingTable !== undefined
+      && data.disconSpectatingTable > 0
+    ) {
       globals.conn!.send("tableUnattend", {
         tableID: data.disconSpectatingTable,
       });

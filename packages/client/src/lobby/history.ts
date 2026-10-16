@@ -39,7 +39,10 @@ export function init(): void {
 
 export function show(): void {
   globals.currentScreen = Screen.History;
-  if (globalThis.location.pathname === "/lobby" && globalThis.location.hash === "") {
+  if (
+    globalThis.location.pathname === "/lobby"
+    && globalThis.location.hash === ""
+  ) {
     setBrowserAddressBarPath("/lobby", "#history", "push");
   }
 
