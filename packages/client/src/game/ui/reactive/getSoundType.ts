@@ -236,27 +236,8 @@ function isOrderChopMove(
     return false;
   }
 
-  // Get the number of 1's left to play on the stacks.
-  let numOnesLeftToPlay = 0;
-  for (const [suitIndex, suit] of variant.suits.entries()) {
-    if (suit.reversed) {
-      continue;
-    }
-
-    const playStack = gameState.playStacks[suitIndex];
-    if (playStack !== undefined && playStack.length === 0) {
-      numOnesLeftToPlay++;
-    }
-  }
-
-  // This function is fired after the one has already played, so "numOnesLeftToPlay" needs to be
-  // adjusted by 1.
-  numOnesLeftToPlay++;
-
-  // We can't Order Chop Move if all of the 1s are played or there is only one 1 left to be played.
-  if (numOnesLeftToPlay === 0 || numOnesLeftToPlay === 1) {
-    return false;
-  }
+  // The number of unplayed 1s is hidden information. Do not use it to decide whether
+  // the OCM sound should play, since that can reveal whether a clued card is trash.
 
   // Find out if there are any other candidate 1s in the hand.
   const playerHand = previousGameState.hands[action.playerIndex];
