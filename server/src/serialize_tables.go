@@ -117,9 +117,8 @@ func restoreTable(ctx context.Context, f os.FileInfo) bool {
 	}
 	t.Spectators = make([]*Spectator, 0)
 	t.KickedPlayers = make(map[int]struct{})
-	if t.ChatRead == nil {
-		t.ChatRead = make(map[int]int)
-	}
+	// Older snapshots stored array offsets rather than stable message IDs.
+	t.RestoreChatCursors()
 	t.mutex = &deadlock.Mutex{}
 
 	// Restore the circular references that could not be represented in JSON

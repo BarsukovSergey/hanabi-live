@@ -130,15 +130,12 @@ func pause(ctx context.Context, s *Session, d *CommandData, t *Table, playerInde
 		msg += "un"
 	}
 	msg += "paused the game."
+	previousID := t.LastChatMessageID
 	chatServerSend(ctx, msg, t.GetRoomName(), d.NoTablesLock)
 
-	// If a user has read all of the chat thus far,
-	// mark that they have also read the "pause" message, since it is superfluous
-	for k, v := range t.ChatRead {
-		if v == len(t.Chat)-1 {
-			t.ChatRead[k] = len(t.Chat)
-		}
-	}
+	// Do not turn a routine pause/unpause notice into unread chat for users
+	// who had already read the chat immediately before it was sent.
+	t.AdvanceCaughtUpReaders(previousID)
 
 	// Send everyone new clock values
 	if d.Setting == "unpause" {

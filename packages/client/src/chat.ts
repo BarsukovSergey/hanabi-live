@@ -26,6 +26,11 @@ import emojis from "./json/emojis.json";
 import emotes from "./json/emotes.json";
 import { Screen } from "./lobby/types/Screen";
 import * as modals from "./modals";
+import {
+  getTableChatIDAttribute,
+  getTableChatIDSelector,
+  TableChatReadCursor,
+} from "./tableChatCursor";
 import { getHTMLInputElement } from "./utils";
 
 export enum SelfChatMessageType {
@@ -39,6 +44,7 @@ const emojiList: string[] = [];
 const emoteList: string[] = [];
 let chatLineNum = 1;
 const lobbyChatDeletionState = new LobbyChatDeletionState();
+const tableChatReadCursor = new TableChatReadCursor();
 let lastPM = "";
 let datetimeLastChatInput = Date.now();
 let typedChatHistory: string[] = [];
@@ -513,8 +519,19 @@ function textToHtml(payload?: string): string {
   return sanEl.innerHTML;
 }
 
-export function add(data: ServerCommandChatData, fast: boolean): void {
-  addInternal(data, fast, true);
+export function add(data: ServerCommandChatData, fast: boolean): boolean {
+  return addInternal(data, fast, true);
+}
+
+export function getTableChatReadPayload(tableID: number): {
+  tableID: number;
+  lastReadMessageID?: number;
+} {
+  const lastReadMessageID = tableChatReadCursor.getLastSeenID(tableID);
+  return {
+    tableID,
+    ...(lastReadMessageID !== undefined && { lastReadMessageID }),
+  };
 }
 
 export function removeDeletedLobbyMessage(chatID: number): void {
@@ -544,7 +561,7 @@ function addInternal(
   updateLiveState: boolean,
 ) {
   if (lobbyChatDeletionState.shouldSkipMessage(data.room, data.chatID)) {
-    return;
+    return false;
   }
 
   // If we are receiving a private message (PM), record who it is from.
@@ -558,7 +575,23 @@ function addInternal(
 
   const chat = getChatBoxElement(data);
   if (chat === undefined) {
-    return;
+    return false;
+  }
+
+  const tableChatIDAttribute = getTableChatIDAttribute(
+    data.room,
+    data.tableChatID,
+  );
+  const tableChatIDSelector = getTableChatIDSelector(
+    data.room,
+    data.tableChatID,
+  );
+  if (
+    tableChatIDSelector !== undefined
+    && chat.find(tableChatIDSelector).length > 0
+  ) {
+    // A live message can overlap with an initial/reconnect table snapshot.
+    return false;
   }
 
   let rawMsg = data.msg;
@@ -576,7 +609,7 @@ function addInternal(
   )}:${`0${dateObj.getMinutes()}`.slice(-2)}`;
 
   const chatIDAttribute = getLobbyChatIDAttribute(data.room, data.chatID);
-  let line = `<span id="chat-line-${chatLineNum}"${chatIDAttribute}`;
+  let line = `<span id="chat-line-${chatLineNum}"${chatIDAttribute}${tableChatIDAttribute}`;
   line += ` class="${fast ? "" : "hidden"}">`;
   line += `[${datetime}]&nbsp; `;
   if (data.recipient !== undefined && data.recipient !== "") {
@@ -627,6 +660,9 @@ function addInternal(
     });
   });
   chatLineNum++;
+  if (tableChatIDAttribute !== "") {
+    tableChatReadCursor.observe(data.room, data.tableChatID);
+  }
 
   // Automatically scroll down.
   if (autoScroll) {
@@ -649,6 +685,7 @@ function addInternal(
       updatePeopleTyping();
     }
   }
+  return true;
 }
 
 /** Find out which chat box we should add the new chat message to. */

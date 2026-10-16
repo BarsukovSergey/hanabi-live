@@ -46,8 +46,10 @@ commands.set("error", (data: ServerCommandErrorData) => {
 
 // Received by the client when a new chat message arrives.
 commands.set("chat", (data: ServerCommandChatData) => {
-  chat.add(data, false); // The second argument is "fast".
-  acknowledgeChatRead(data.room, data.recipient);
+  // Do not double-count duplicates delivered by a live message and a table snapshot.
+  if (chat.add(data, false)) {
+    acknowledgeChatRead(data.room, data.recipient);
+  }
 });
 
 commands.set("chatDelete", (data: ServerCommandChatDeleteData) => {
@@ -83,17 +85,19 @@ function acknowledgeChatRead(
   }
 
   if (globals.currentScreen === Screen.PreGame) {
-    // Notify the server that we have read the chat message that was just received.
-    globals.conn!.send("chatRead", {
-      tableID: globals.tableID,
-    });
+    // Acknowledge the last *rendered* message, not an unseen concurrent message.
+    globals.conn!.send(
+      "chatRead",
+      chat.getTableChatReadPayload(globals.tableID),
+    );
   } else if (globals.currentScreen === Screen.Game && globals.ui !== null) {
     if ($("#game-chat-modal").is(":visible")) {
       // The chat window was open; notify the server that we have read the chat message that was
       // just received.
-      globals.conn!.send("chatRead", {
-        tableID: globals.tableID,
-      });
+      globals.conn!.send(
+        "chatRead",
+        chat.getTableChatReadPayload(globals.tableID),
+      );
       return;
     }
 
@@ -105,9 +109,10 @@ function acknowledgeChatRead(
     if (!UIState.playing && !UIState.finished) {
       // The chat window was not open; pop open the chat window every time for spectators.
       gameChat.toggle(false);
-      globals.conn!.send("chatRead", {
-        tableID: globals.tableID,
-      });
+      globals.conn!.send(
+        "chatRead",
+        chat.getTableChatReadPayload(globals.tableID),
+      );
     } else {
       // The chat window was not open; by default, keep it closed. Change the "Chat" button to say
       // "Chat (1)" (or e.g. "Chat (2)", if they have multiple unread messages).

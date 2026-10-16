@@ -3,6 +3,7 @@
 import { assertNotNull, parseFloatSafe } from "complete-common";
 import interact from "interactjs";
 import { globals } from "../Globals";
+import { getTableChatReadPayload } from "../chat";
 import { FADE_TIME_MS } from "../constants";
 import { getHTMLElement } from "../utils";
 
@@ -130,9 +131,7 @@ export function show(focusInput = true): void {
       globals.conn,
       'The "globals.conn" object is not initialized.',
     );
-    globals.conn.send("chatRead", {
-      tableID: globals.tableID,
-    });
+    globals.conn.send("chatRead", getTableChatReadPayload(globals.tableID));
 
     // Reset the "Chat" UI button back to normal.
     assertNotNull(globals.ui, 'The "globals.ui" object is not initialized.');

@@ -6,8 +6,9 @@ import (
 
 type CommandData struct {
 	// various
-	TableID    uint64 `json:"tableID"`
-	DatabaseID int    `json:"databaseID"`
+	TableID           uint64 `json:"tableID"`
+	DatabaseID        int    `json:"databaseID"`
+	LastReadMessageID uint64 `json:"lastReadMessageID"` // Optional table-chat read cursor.
 
 	// setting
 	Setting string `json:"setting"`

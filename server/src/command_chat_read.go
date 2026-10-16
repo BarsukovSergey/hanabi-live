@@ -37,6 +37,12 @@ func commandChatRead(ctx context.Context, s *Session, d *CommandData) {
 		return
 	}
 
-	// Mark that they have read all of the in-game chat
-	t.ChatRead[s.UserID] = len(t.Chat)
+	// New clients acknowledge the last actually received table message,
+	// so an in-flight message cannot accidentally be marked read.
+	// Older browser tabs omit the cursor; preserve their mark-all behavior.
+	if d.LastReadMessageID > 0 {
+		t.MarkChatRead(s.UserID, d.LastReadMessageID)
+	} else {
+		t.MarkChatRead(s.UserID, t.LastChatMessageID)
+	}
 }

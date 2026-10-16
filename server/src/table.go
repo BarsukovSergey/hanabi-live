@@ -56,15 +56,19 @@ type Table struct {
 	Options      *Options      // Options that are stored in the database
 	ExtraOptions *ExtraOptions // Options that are not stored in the database
 
-	Chat     []*TableChatMessage // All of the in-game chat history
-	ChatRead map[int]int         // A map of which users have read which messages
-	Deleted  bool                `json:"-"` // Used to prevent race conditions
+	Chat              []*TableChatMessage // In-memory table chat history
+	LastChatMessageID uint64              // Monotonically increasing per-table ID, persisted on restart
+	LastReadMessageID map[int]uint64      // Last read table-chat ID for each user
+	// ChatRead exists solely to migrate older serialized tables whose cursors were array positions.
+	ChatRead map[int]int `json:"ChatRead,omitempty"`
+	Deleted  bool        `json:"-"` // Used to prevent race conditions
 
 	// Each table has its own mutex to ensure that only one action can occur at the same time
 	mutex *deadlock.Mutex
 }
 
 type TableChatMessage struct {
+	ID       uint64 // Stable sequence ID local to this table
 	UserID   int
 	Username string
 	Msg      string
@@ -110,9 +114,11 @@ func NewTable(name string, ownerID int) *Table {
 		Options:      NewOptions(),
 		ExtraOptions: &ExtraOptions{},
 
-		Chat:     make([]*TableChatMessage, 0),
-		ChatRead: make(map[int]int),
-		Deleted:  false,
+		Chat:              make([]*TableChatMessage, 0),
+		LastChatMessageID: 0,
+		LastReadMessageID: make(map[int]uint64),
+		ChatRead:          nil,
+		Deleted:           false,
 
 		mutex: &deadlock.Mutex{},
 	}
@@ -443,4 +449,78 @@ func (t *Table) ActiveSpectators() []*Spectator {
 		}
 	}
 	return activeSpectators
+}
+
+// AppendChat assigns the next table-local ID. Caller must hold the table lock.
+func (t *Table) AppendChat(message *TableChatMessage) {
+	t.LastChatMessageID++
+	message.ID = t.LastChatMessageID
+	t.Chat = append(t.Chat, message)
+}
+
+// MarkChatRead never moves a read cursor backwards or past the latest message.
+// Caller must hold the table lock.
+func (t *Table) MarkChatRead(userID int, messageID uint64) {
+	if t.LastReadMessageID == nil {
+		t.LastReadMessageID = make(map[int]uint64)
+	}
+	if messageID > t.LastChatMessageID {
+		messageID = t.LastChatMessageID
+	}
+	if lastRead, exists := t.LastReadMessageID[userID]; !exists || messageID > lastRead {
+		// An explicit acknowledgement of an empty chat must still create a cursor.
+		t.LastReadMessageID[userID] = messageID
+	}
+}
+
+// UnreadChatCount counts message IDs instead of subtracting a legacy array index.
+// This stays correct if older chat messages are ever pruned from the slice.
+func (t *Table) UnreadChatCount(userID int) int {
+	lastRead := t.LastReadMessageID[userID]
+	unread := 0
+	for _, message := range t.Chat {
+		if message.ID > lastRead {
+			unread++
+		}
+	}
+	return unread
+}
+
+// AdvanceCaughtUpReaders treats a routine server notice as read only for users
+// who were already caught up immediately before that notice was appended.
+func (t *Table) AdvanceCaughtUpReaders(previousID uint64) {
+	for userID, lastRead := range t.LastReadMessageID {
+		if lastRead == previousID {
+			t.MarkChatRead(userID, t.LastChatMessageID)
+		}
+	}
+}
+
+// RestoreChatCursors upgrades pre-ID chat entries and pre-ID read offsets from
+// tables serialized by earlier server versions. Call once after JSON unmarshal.
+func (t *Table) RestoreChatCursors() {
+	var latestID uint64
+	for _, message := range t.Chat {
+		if message.ID <= latestID {
+			message.ID = latestID + 1
+		}
+		latestID = message.ID
+	}
+	if latestID > t.LastChatMessageID {
+		t.LastChatMessageID = latestID
+	}
+	if t.LastReadMessageID == nil {
+		t.LastReadMessageID = make(map[int]uint64)
+	}
+	for userID, count := range t.ChatRead {
+		if count <= 0 {
+			continue
+		}
+		if count > len(t.Chat) {
+			count = len(t.Chat)
+		}
+		t.MarkChatRead(userID, t.Chat[count-1].ID)
+	}
+	// Do not serialize the old offset map back into new snapshots.
+	t.ChatRead = nil
 }

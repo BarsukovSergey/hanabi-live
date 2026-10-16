@@ -45,13 +45,15 @@ func (m lobbyChatEvent) wire() *ChatMessage {
 }
 
 type tableChatEvent struct {
-	content chatMessageContent
-	room    string
+	content     chatMessageContent
+	room        string
+	tableChatID uint64
 }
 
 func (m tableChatEvent) wire() *ChatMessage {
 	msg := m.content.wire()
 	msg.Room = m.room
+	msg.TableChatID = m.tableChatID
 	return &msg
 }
 

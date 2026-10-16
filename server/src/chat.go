@@ -28,14 +28,15 @@ var (
 )
 
 type ChatMessage struct {
-	Msg       string        `json:"msg"`
-	Who       string        `json:"who"`
-	Source    ChatLogSource `json:"source"`
-	Datetime  time.Time     `json:"datetime"`
-	ChatID    int           `json:"chatID,omitempty"`
-	PMID      int           `json:"pmID,omitempty"`
-	Room      string        `json:"room"`
-	Recipient string        `json:"recipient"`
+	Msg         string        `json:"msg"`
+	Who         string        `json:"who"`
+	Source      ChatLogSource `json:"source"`
+	Datetime    time.Time     `json:"datetime"`
+	ChatID      int           `json:"chatID,omitempty"`
+	TableChatID uint64        `json:"tableChatID,omitempty"`
+	PMID        int           `json:"pmID,omitempty"`
+	Room        string        `json:"room"`
+	Recipient   string        `json:"recipient"`
 }
 
 // chatServerSend is a helper function to send a message from the server
@@ -238,12 +239,13 @@ func chatSendPastFromTable(s *Session, t *Table) {
 				source:   chatMessageSource(false, gcm.Server),
 				datetime: gcm.Datetime,
 			},
-			room: t.GetRoomName(),
+			room:        t.GetRoomName(),
+			tableChatID: gcm.ID,
 		}).wire()
 		chatList = append(chatList, cm)
 	}
 	s.Emit("chatList", &ChatListMessage{
 		List:   chatList,
-		Unread: len(t.Chat) - t.ChatRead[s.UserID],
+		Unread: t.UnreadChatCount(s.UserID),
 	})
 }

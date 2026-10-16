@@ -221,7 +221,7 @@ func tableJoin(ctx context.Context, s *Session, d *CommandData, t *Table) *Sessi
 
 	// Send them the chat history for this game
 	chatSendPastFromTable(s, t)
-	t.ChatRead[p.UserID] = len(t.Chat)
+	t.MarkChatRead(p.UserID, t.LastChatMessageID)
 
 	// Announce the new player (unless this is the first one)
 	if len(t.Players) > 1 {

@@ -241,7 +241,7 @@ func commandChatTable(ctx context.Context, s *Session, d *CommandData, tableID u
 		Datetime: time.Now(),
 		Server:   d.Server,
 	}
-	t.Chat = append(t.Chat, chatMsg)
+	t.AppendChat(chatMsg)
 
 	// Send it to all of the players and spectators
 	t.NotifyChat((tableChatEvent{
@@ -251,7 +251,8 @@ func commandChatTable(ctx context.Context, s *Session, d *CommandData, tableID u
 			source:   chatMessageSource(d.Discord, d.Server),
 			datetime: chatMsg.Datetime,
 		},
-		room: d.Room,
+		room:        d.Room,
+		tableChatID: chatMsg.ID,
 	}).wire())
 
 	// Check for commands

@@ -20,6 +20,7 @@ type InternalChatMessage =
       readonly kind: "table";
       readonly source: ChatSource;
       readonly room: string;
+      readonly tableChatID?: number;
     })
   | (ChatMessageContent & {
       readonly kind: "private";
@@ -55,7 +56,13 @@ export function chatMessageToWire(
     }
 
     case "table": {
-      return { ...common, room: message.room };
+      return {
+        ...common,
+        room: message.room,
+        ...(message.tableChatID !== undefined && {
+          tableChatID: message.tableChatID,
+        }),
+      };
     }
 
     case "private": {

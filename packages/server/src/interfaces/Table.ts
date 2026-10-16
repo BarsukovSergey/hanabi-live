@@ -10,6 +10,7 @@ import { tablePlayer } from "./TablePlayer";
 
 const tableChatMessage = z
   .object({
+    id: z.number().int().positive().optional(), // Old serialized rows do not yet have IDs.
     userID,
     username: z.string().min(1),
     msg: z.string().min(1),
@@ -45,7 +46,11 @@ const table = z
     extraOptions,
 
     chat: tableChatMessage.array(),
-    chatRead: z.record(userID, z.number().int()),
+    lastChatMessageID: z.number().int().nonnegative().optional(),
+    lastReadMessageID: z
+      .record(userID, z.number().int().nonnegative())
+      .optional(),
+    chatRead: z.record(userID, z.number().int()).optional(), // Legacy array offsets.
   })
   .strict();
 

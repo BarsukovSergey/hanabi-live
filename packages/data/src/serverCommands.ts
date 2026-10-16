@@ -22,6 +22,7 @@ const serverCommandChatData = z
     source: z.enum(["user", "server", "discord"]),
     datetime: z.string().min(1), // new Date(x) string
     chatID: z.number().int().positive().optional(),
+    tableChatID: z.number().int().positive().optional(), // Table-local sequence; not a DB chatID.
     pmID: z.number().int().positive().optional(),
     room: z.string().min(1).optional(), // room code string
     recipient: z.string().min(1).optional(), // plain string

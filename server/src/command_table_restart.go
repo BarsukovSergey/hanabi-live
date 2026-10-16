@@ -319,10 +319,11 @@ func tableRestart(
 	oldChat := make([]*TableChatMessage, len(t.Chat))
 	copy(oldChat, t.Chat)
 
-	// Additionally, make a copy of the ChatRead map
-	oldChatRead := make(map[int]int)
-	for k, v := range t.ChatRead {
-		oldChatRead[k] = v
+	// Preserve per-message read cursors across the restarted table.
+	oldLastChatMessageID := t.LastChatMessageID
+	oldLastReadMessageID := make(map[int]uint64)
+	for k, v := range t.LastReadMessageID {
+		oldLastReadMessageID[k] = v
 	}
 
 	// Force everyone to go back to the lobby
@@ -433,19 +434,16 @@ func tableRestart(
 	t2.Chat = make([]*TableChatMessage, len(oldChat))
 	copy(t2.Chat, oldChat)
 
-	// Copy over the old ChatRead map
-	// (this has to be done after the players join the game)
-	t2.ChatRead = make(map[int]int)
-	for k, v := range oldChatRead {
-		t2.ChatRead[k] = v
-	}
+	// Restore the old sequence and read cursors after preparing the new table.
+	t2.LastChatMessageID = oldLastChatMessageID
+	t2.LastReadMessageID = oldLastReadMessageID
 
 	t2.ExtraOptions.Restarted = true
 
 	// Send the creator of the game the chat history
 	s.NotifyTableJoined(t2)
 	chatSendPastFromTable(s, t2)
-	t2.ChatRead[s.UserID] = len(t2.Chat)
+	t2.MarkChatRead(s.UserID, t2.LastChatMessageID)
 
 	// Emulate the other players joining the game.
 	// Reuse each player's existing PregameStats from the original table so that tableJoin
@@ -499,13 +497,9 @@ func tableRestart(
 	url := getURLFromPath(path)
 	link := "<a href=\"" + url + "\" target=\"_blank\" rel=\"noopener noreferrer\">#" + strconv.Itoa(t.ExtraOptions.DatabaseID) + "</a>"
 	msg := "The game has been restarted (from game " + link + ")."
+	previousID := t2.LastChatMessageID
 	chatServerSend(ctx, msg, t2.GetRoomName(), true)
 
-	// If a user has read all of the chat thus far,
-	// mark that they have also read the "restarted" message, since it is superfluous
-	for k, v := range t2.ChatRead {
-		if v == len(t2.Chat)-1 {
-			t2.ChatRead[k] = len(t2.Chat)
-		}
-	}
+	// Keep the restart notice read for users caught up before it was sent.
+	t2.AdvanceCaughtUpReaders(previousID)
 }

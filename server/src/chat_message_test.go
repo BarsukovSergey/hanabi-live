@@ -72,6 +72,20 @@ func TestChatEventWirePayload(t *testing.T) {
 			want: `{"msg":"clue","who":"Ada","source":"user","datetime":"2026-10-14T12:00:00Z","room":"table00123","recipient":""}`,
 		},
 		{
+			name: "table chat with its own sequence ID",
+			event: tableChatEvent{
+				content: chatMessageContent{
+					msg:      "clue",
+					who:      "Ada",
+					source:   ChatLogSourceUser,
+					datetime: datetime,
+				},
+				room:        "table123",
+				tableChatID: 7,
+			},
+			want: `{"msg":"clue","who":"Ada","source":"user","datetime":"2026-10-14T12:00:00Z","tableChatID":7,"room":"table123","recipient":""}`,
+		},
+		{
 			name: "table server message",
 			event: tableChatEvent{
 				content: chatMessageContent{
