@@ -40,7 +40,8 @@ describe("OCM sound, replay 1580957 turn 7", () => {
         deck: previous.deck,
         turn: { currentPlayerIndex: 1 },
         stats: { maxScore: 25, numSubsequentBlindPlays: 0 },
-        playStacks: [skippedIsTrash ? [1] : [], [1], [1], [1], []],
+        // After Blue 1, only Green 1 remains unplayed in replay 1580957.
+        playStacks: [skippedIsTrash ? [1] : [], [1], [], [1], [1]],
       } as unknown as GameState;
       const action = { type: "play", order: 4, playerIndex: 0 } as ActionPlay;
 

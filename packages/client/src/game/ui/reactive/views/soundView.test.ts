@@ -45,7 +45,7 @@ describe("OCM sound playback", () => {
     deck: previousState.deck,
     hands: [[0]],
     stats: { maxScore: 25, numSubsequentBlindPlays: 0 },
-    playStacks: [[1], [1], [1], [1], []],
+    playStacks: [[1], [1], [], [1], [1]],
     turn: { currentPlayerIndex: 1, turnNum: 8 },
   } as unknown as GameState;
   const action = {
