@@ -25,6 +25,7 @@ import { planClientHypotheticalAction } from "./planClientHypotheticalAction";
 
 jest.mock("./UIGlobals", () => ({ globals: {} }));
 jest.mock("./HanabiCardMouse", () => ({}));
+jest.mock("../reducers/uiReducer", () => ({ uiReducer: jest.fn() }));
 
 const bottomOrder = 2 as CardOrder;
 
@@ -330,5 +331,4 @@ describe("client hypothetical planning", () => {
       expect(storeState.visibleState?.turn.currentPlayerIndex).toBe(1);
     },
   );
-
 });
