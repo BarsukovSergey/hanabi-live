@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import type { GameAction, GameState } from "@hanabi-live/game";
 import { test } from "@jest/globals";
-import { loadGameJSON } from "../../../test/loadGameJSON";
+import { loadGameJSON } from "../../../../test/loadGameJSON";
 import { getSoundType } from "./getSoundType";
 
 test("inspect exported replay turn 7", () => {
