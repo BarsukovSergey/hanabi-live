@@ -733,7 +733,7 @@ describe("hypothetical planning", () => {
       },
       cardIdentities: [
         context.cardIdentities[0]!,
-        { suitIndex: 0 as SuitIndex, rank: 1 },
+        { suitIndex: 0, rank: 1 },
       ],
     } as PlanHypotheticalActionContext;
 
