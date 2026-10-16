@@ -73,7 +73,7 @@ export function show(): void {
   );
 }
 
-export function hide(): void {
+export function hide(updateURL = true): void {
   globals.currentScreen = Screen.Lobby;
   tablesDraw();
   usersDraw.draw();
@@ -109,7 +109,9 @@ export function hide(): void {
   $("#lobby-chat-pregame-text").off();
 
   // Set the browser address bar.
-  setBrowserAddressBarPath("/lobby");
+  if (updateURL) {
+    setBrowserAddressBarPath("/lobby");
+  }
 }
 
 export function draw(): void {

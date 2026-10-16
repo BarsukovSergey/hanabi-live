@@ -2,6 +2,7 @@ import type { ServerCommandWelcomeData } from "@hanabi-live/data";
 import { DEFAULT_VARIANT_NAME } from "@hanabi-live/game";
 import { parseIntSafe } from "complete-common";
 import { globals } from "../Globals";
+import * as history from "./history";
 import { setBrowserAddressBarPath } from "../utils";
 import type { GameJSON } from "./hypoCompress";
 import { expand } from "./hypoCompress";
@@ -9,6 +10,16 @@ import { expand } from "./hypoCompress";
 export function parseAndGoto(data: ServerCommandWelcomeData): void {
   // Disable custom path functionality for first time users.
   if (data.firstTimeUser) {
+    return;
+  }
+
+  if (globalThis.location.pathname === "/history") {
+    history.show();
+    return;
+  }
+  if (globalThis.location.pathname === "/history/friends") {
+    history.show();
+    history.showFriends();
     return;
   }
 
