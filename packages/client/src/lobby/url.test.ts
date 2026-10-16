@@ -3,6 +3,7 @@ import { afterEach, describe, expect, jest, test } from "@jest/globals";
 import { globals } from "../Globals";
 import type { GameJSON } from "./hypoCompress";
 import { expand } from "./hypoCompress";
+import * as history from "./history";
 import { parseAndGoto } from "./url";
 
 jest.mock("./history", () => ({ show: jest.fn(), showFriends: jest.fn() }));
@@ -67,6 +68,23 @@ describe("replay URL loading", () => {
       expand(`${payload}${suffix}`),
     );
     expect(globalThis.location.hash).toBe("#42");
+  });
+
+  test.each([
+    ["#history", false],
+    ["#history-friends", true],
+  ])("restores lobby history route %s", (hash, friends) => {
+    const show = jest.spyOn(history, "show");
+    const showFriends = jest.spyOn(history, "showFriends");
+    Object.defineProperty(globalThis, "location", {
+      configurable: true,
+      value: new URL(`https://hanab.live/lobby${hash}`),
+    });
+
+    parseAndGoto({ firstTimeUser: false } as ServerCommandWelcomeData);
+
+    expect(show).toHaveBeenCalledTimes(1);
+    expect(showFriends).toHaveBeenCalledTimes(friends ? 1 : 0);
   });
 
   test.each([
