@@ -494,7 +494,10 @@ function setURL(data: InitData) {
   setBrowserAddressBarPath(
     path,
     globalThis.location.hash,
-    globalThis.location.pathname === "/lobby" ? "push" : "replace",
+    globalThis.location.pathname === "/lobby"
+    || globalThis.location.pathname.startsWith("/history")
+      ? "push"
+      : "replace",
   );
 }
 
