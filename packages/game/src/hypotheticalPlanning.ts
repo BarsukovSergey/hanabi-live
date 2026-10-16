@@ -11,6 +11,7 @@ import type { GameState } from "./interfaces/GameState";
 import type { Variant } from "./interfaces/Variant";
 import { isCardTouchedByClue, msgClueToClue } from "./rules/clues";
 import { getNextPlayableRanks } from "./rules/playStacks";
+import { getCharacterNameForPlayer } from "./reducers/reducerHelpers";
 import type { CardOrder } from "./types/CardOrder";
 import type { ColorIndex } from "./types/ColorIndex";
 import type { GameAction } from "./types/gameActions";
@@ -301,6 +302,18 @@ export function planHypotheticalAction(
       intent.type === "colorClue"
         ? { type: ClueType.Color, value: intent.value }
         : { type: ClueType.Rank, value: intent.value };
+    const characterName = metadata.options.detrimentalCharacters
+      ? getCharacterNameForPlayer(playerIndex, metadata.characterAssignments)
+      : "";
+    const characterMetadata = metadata.characterMetadata[playerIndex];
+    if (
+      characterName === "Fuming"
+      && clue.type === ClueType.Color
+      && clue.value !== characterMetadata
+    ) {
+      return null;
+    }
+
     const targetCards: HypotheticalCard[] = [];
     const targetHand = gameState.hands[intent.target];
     assertDefined(targetHand, "Expected a hand for the clue target.");
@@ -311,6 +324,22 @@ export function planHypotheticalAction(
       }
       targetCards.push(card);
     }
+    if (characterName === "Inept") {
+      const fullClue = msgClueToClue(clue, variant);
+      const touchesForbiddenSuit = targetCards.some(({ identity }) => {
+        const { suitIndex, rank } = identity;
+        return (
+          suitIndex !== null
+          && rank !== null
+          && suitIndex === characterMetadata
+          && isCardTouchedByClue(variant, fullClue, suitIndex, rank)
+        );
+      });
+      if (touchesForbiddenSuit) {
+        return null;
+      }
+    }
+
     actions.push({
       type: "clue",
       clue,
