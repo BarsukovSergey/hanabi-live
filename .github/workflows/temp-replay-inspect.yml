@@ -13,6 +13,8 @@ jobs:
           python3 - <<'PY'
           import json
           d=json.load(open('/tmp/hanabi-replay.json'))
+          print('initial_hands:', [[(o,d['deck'][o]) for o in range(i*5,(i+1)*5)] for i in range(3)])
+          print('actions_0_14:', [(i+1, d['players'][i%3] if i%3<len(d['players']) else '', a, d['deck'][a['target']] if a['type'] in (0,1) else None) for i,a in enumerate(d['actions'][:14])])
           print('type:',type(d).__name__)
           if isinstance(d,dict):
               print('keys:',list(d))
