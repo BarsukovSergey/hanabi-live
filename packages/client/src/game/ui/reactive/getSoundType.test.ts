@@ -1,11 +1,15 @@
-import type { ActionPlay, CardState, GameMetadata, GameState } from "@hanabi-live/game";
+import type {
+  ActionPlay,
+  CardState,
+  GameMetadata,
+  GameState,
+} from "@hanabi-live/game";
 import { describe, expect, test } from "@jest/globals";
 import { SoundType } from "../../types/SoundType";
 import { getSoundType } from "./getSoundType";
 
-describe("OCM sound, replay 1580957 turn 7", () => {
-  const makeOne = (order: number, suitIndex: number): CardState =>
-    ({
+function makeOne(order: number, suitIndex: number): CardState {
+  return {
       order,
       suitIndex,
       rank: 1,
@@ -13,8 +17,10 @@ describe("OCM sound, replay 1580957 turn 7", () => {
       positiveRankClues: [1],
       positiveColorClues: [],
       dealtToStartingHand: true,
-    }) as unknown as CardState;
+  } as unknown as CardState;
+}
 
+describe("OCM sound, replay 1580957 turn 7", () => {
   const playedBlueOne = makeOne(4, 3);
   const skippedRedOne = makeOne(0, 0);
   const metadata = {
