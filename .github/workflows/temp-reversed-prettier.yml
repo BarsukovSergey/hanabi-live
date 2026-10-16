@@ -1,0 +1,14 @@
+name: Temporary reverse formatting inspect
+on:
+  push:
+    branches:
+      - ci/reversed-3047-prettier
+jobs:
+  prettier:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/workflows/setup
+      - run: |
+          npx prettier --write packages/game/src/rules/variants/reversible.test.ts
+          git diff -- packages/game/src/rules/variants/reversible.test.ts
