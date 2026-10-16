@@ -33,7 +33,7 @@ export function parseAndGoto(data: ServerCommandWelcomeData): void {
       history.show();
       return;
     }
-    if (globalThis.location.hash === "#history-friends") {
+    else if (globalThis.location.hash === "#history-friends") {
       history.show();
       history.showFriends();
       return;

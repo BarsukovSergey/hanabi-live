@@ -95,11 +95,10 @@ describe("replay URL loading", () => {
     const show = jest.spyOn(history, "show");
     const showFriends = jest.spyOn(history, "showFriends");
     const showOtherScores = jest.spyOn(history, "showOtherScoresFromURL");
+    const url = "https://hanab.live/lobby#history-other-scores-friends-p4v0s1";
     Object.defineProperty(globalThis, "location", {
       configurable: true,
-      value: new URL(
-        "https://hanab.live/lobby#history-other-scores-friends-p4v0s1",
-      ),
+      value: new URL(url),
     });
 
     parseAndGoto({ firstTimeUser: false } as ServerCommandWelcomeData);
