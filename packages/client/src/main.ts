@@ -48,6 +48,7 @@ initErrorListener();
 
 $(document).ready(() => {
   globalThis.addEventListener("popstate", () => {
+    sessionStorage.setItem("historyNavigation", globalThis.location.pathname);
     globalThis.location.reload();
   });
 
