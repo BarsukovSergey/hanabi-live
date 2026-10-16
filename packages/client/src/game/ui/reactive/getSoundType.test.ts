@@ -39,26 +39,29 @@ describe("OCM sound", () => {
   test.each([
     ["only one playable 1 remains", 4],
     ["multiple playable 1s remain", 2],
-  ])("plays OCM when a newer clued 1 is played and %s", (_name, finishedStacks) => {
-    const previous = {
-      deck: [olderOne, newerOne],
-      hands: [[0, 1]],
-      stats: { maxScore: 25 },
-    } as unknown as GameState;
-    const current = {
-      deck: [olderOne, newerOne],
-      hands: [[0]],
-      stats: { maxScore: 25 },
-      turn: { currentPlayerIndex: 1 },
-      playStacks: Array.from({ length: 5 }, (_, index) =>
-        index < finishedStacks ? [1] : [],
-      ),
-    } as unknown as GameState;
+  ])(
+    "plays OCM when a newer clued 1 is played and %s",
+    (_name, finishedStacks) => {
+      const previous = {
+        deck: [olderOne, newerOne],
+        hands: [[0, 1]],
+        stats: { maxScore: 25 },
+      } as unknown as GameState;
+      const current = {
+        deck: [olderOne, newerOne],
+        hands: [[0]],
+        stats: { maxScore: 25 },
+        turn: { currentPlayerIndex: 1 },
+        playStacks: Array.from({ length: 5 }, (_, index) =>
+          index < finishedStacks ? [1] : [],
+        ),
+      } as unknown as GameState;
 
-    expect(getSoundType(previous, current, action, metadata)).toBe(
-      SoundType.OrderChopMove,
-    );
-  });
+      expect(getSoundType(previous, current, action, metadata)).toBe(
+        SoundType.OrderChopMove,
+      );
+    },
+  );
 
   test("does not play OCM for the oldest clued 1", () => {
     const previous = {
