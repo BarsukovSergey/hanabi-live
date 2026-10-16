@@ -9,6 +9,7 @@ import type { CardState } from "./interfaces/CardState";
 import type { GameMetadata } from "./interfaces/GameMetadata";
 import type { GameState } from "./interfaces/GameState";
 import type { Variant } from "./interfaces/Variant";
+import { getCharacterNameForPlayer } from "./reducers/reducerHelpers";
 import { isCardTouchedByClue, msgClueToClue } from "./rules/clues";
 import { getNextPlayableRanks } from "./rules/playStacks";
 import type { CardOrder } from "./types/CardOrder";
@@ -310,6 +311,28 @@ export function planHypotheticalAction(
       intent.type === "colorClue"
         ? { type: ClueType.Color, value: intent.value }
         : { type: ClueType.Rank, value: intent.value };
+    const characterName = metadata.options.detrimentalCharacters
+      ? getCharacterNameForPlayer(playerIndex, metadata.characterAssignments)
+      : "";
+    const characterMetadata = metadata.characterMetadata[playerIndex];
+    const targetCharacterName = metadata.options.detrimentalCharacters
+      ? getCharacterNameForPlayer(intent.target, metadata.characterAssignments)
+      : "";
+    if (
+      (characterName === "Fuming"
+        && clue.type === ClueType.Color
+        && clue.value !== characterMetadata)
+      || (characterName === "Dumbfounded"
+        && clue.type === ClueType.Rank
+        && clue.value !== characterMetadata)
+      || (targetCharacterName === "Color-Blind" && clue.type === ClueType.Color)
+      || (targetCharacterName === "Vulnerable"
+        && clue.type === ClueType.Rank
+        && (clue.value === 2 || clue.value === 5))
+    ) {
+      return null;
+    }
+
     const targetCards: HypotheticalCard[] = [];
     const targetHand = gameState.hands[intent.target];
     assertDefined(targetHand, "Expected a hand for the clue target.");
@@ -320,6 +343,24 @@ export function planHypotheticalAction(
       }
       targetCards.push(card);
     }
+    if (characterName === "Inept" || characterName === "Awkward") {
+      const fullClue = msgClueToClue(clue, variant);
+      const touchesForbiddenCard = targetCards.some(({ identity }) => {
+        const { suitIndex, rank } = identity;
+        return (
+          suitIndex !== null
+          && rank !== null
+          && isCardTouchedByClue(variant, fullClue, suitIndex, rank)
+          && (characterName === "Inept"
+            ? suitIndex === characterMetadata
+            : rank === characterMetadata)
+        );
+      });
+      if (touchesForbiddenCard) {
+        return null;
+      }
+    }
+
     actions.push({
       type: "clue",
       clue,
