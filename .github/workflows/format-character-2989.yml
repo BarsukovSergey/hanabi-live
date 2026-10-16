@@ -1,0 +1,28 @@
+name: Format hypothetical character regression
+
+on:
+  push:
+    paths:
+      - ".github/workflows/format-character-2989.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/workflows/setup
+      - name: Print formatted game files
+        run: |
+          npx prettier --write packages/game/src/hypotheticalPlanning.ts packages/game/src/hypotheticalPlanning.test.ts
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          for tag, file in [
+              ("PLAN", "packages/game/src/hypotheticalPlanning.ts"),
+              ("TESTS", "packages/game/src/hypotheticalPlanning.test.ts"),
+          ]:
+              print("FORMATTED_" + tag + " " + json.dumps(Path(file).read_text()))
+          PY
