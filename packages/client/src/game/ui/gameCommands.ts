@@ -495,7 +495,7 @@ function setURL(data: InitData) {
     path,
     globalThis.location.hash,
     globalThis.location.pathname === "/lobby"
-    || globalThis.location.pathname.startsWith("/history")
+      || globalThis.location.pathname.startsWith("/history")
       ? "push"
       : "replace",
   );

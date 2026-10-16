@@ -2,8 +2,8 @@ import type { ServerCommandWelcomeData } from "@hanabi-live/data";
 import { DEFAULT_VARIANT_NAME } from "@hanabi-live/game";
 import { parseIntSafe } from "complete-common";
 import { globals } from "../Globals";
-import * as history from "./history";
 import { setBrowserAddressBarPath } from "../utils";
+import * as history from "./history";
 import type { GameJSON } from "./hypoCompress";
 import { expand } from "./hypoCompress";
 

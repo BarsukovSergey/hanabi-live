@@ -5,6 +5,7 @@ import type { GameJSON } from "./hypoCompress";
 import { expand } from "./hypoCompress";
 import { parseAndGoto } from "./url";
 
+jest.mock("./history", () => ({ show: jest.fn(), showFriends: jest.fn() }));
 jest.mock("../Globals", () => ({ globals: { conn: { send: jest.fn() } } }));
 jest.mock("../utils", () => ({ setBrowserAddressBarPath: jest.fn() }));
 
