@@ -13,36 +13,8 @@ export function parseAndGoto(data: ServerCommandWelcomeData): void {
     return;
   }
 
-  if (globalThis.location.pathname === "/lobby") {
-    const scoresMatch = /^#history-other-scores-(friends-)?(.+)$/u.exec(
-      globalThis.location.hash,
-    );
-    if (scoresMatch !== null) {
-      const friends = scoresMatch[1] !== undefined;
-      const seed = scoresMatch[2];
-      if (seed !== undefined) {
-        history.show();
-        if (friends) {
-          history.showFriends();
-        }
-        history.showOtherScoresFromURL(decodeURIComponent(seed), friends);
-        return;
-      }
-    }
-    switch (globalThis.location.hash) {
-      case "#history": {
-        history.show();
-        return;
-      }
-      case "#history-friends": {
-        history.show();
-        history.showFriends();
-        return;
-      }
-      default: {
-        break;
-      }
-    }
+  if (restoreLobbyHistoryView()) {
+    return;
   }
 
   // Automatically create a table if we are using a "/create-table" URL.
@@ -214,3 +186,43 @@ export function parseAndGoto(data: ServerCommandWelcomeData): void {
   // Otherwise, we will stay in the lobby.
   setBrowserAddressBarPath("/lobby");
 }
+
+function restoreLobbyHistoryView(): boolean {
+  if (globalThis.location.pathname !== "/lobby") {
+    return false;
+  }
+
+  const scoresMatch = /^#history-other-scores-(friends-)?(.+)$/u.exec(
+    globalThis.location.hash,
+  );
+  if (scoresMatch !== null) {
+    const friends = scoresMatch[1] !== undefined;
+    const seed = scoresMatch[2];
+    if (seed !== undefined) {
+      history.show();
+      if (friends) {
+        history.showFriends();
+      }
+      history.showOtherScoresFromURL(decodeURIComponent(seed), friends);
+      return true;
+    }
+  }
+
+  switch (globalThis.location.hash) {
+    case "#history": {
+      history.show();
+      return true;
+    }
+
+    case "#history-friends": {
+      history.show();
+      history.showFriends();
+      return true;
+    }
+
+    default: {
+      return false;
+    }
+  }
+}
+
