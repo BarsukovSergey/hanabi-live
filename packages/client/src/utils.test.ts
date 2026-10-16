@@ -2,8 +2,14 @@ import { afterEach, describe, expect, jest, test } from "@jest/globals";
 import { setBrowserAddressBarPath } from "./utils";
 
 describe("setBrowserAddressBarPath", () => {
-  const originalLocation = Object.getOwnPropertyDescriptor(globalThis, "location");
-  const originalHistory = Object.getOwnPropertyDescriptor(globalThis, "history");
+  const originalLocation = Object.getOwnPropertyDescriptor(
+    globalThis,
+    "location",
+  );
+  const originalHistory = Object.getOwnPropertyDescriptor(
+    globalThis,
+    "history",
+  );
 
   afterEach(() => {
     if (originalLocation === undefined) {
