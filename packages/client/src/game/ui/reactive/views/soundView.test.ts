@@ -1,5 +1,5 @@
 import { SoundMove } from "@hanabi-live/data";
-import type { GameState } from "@hanabi-live/game";
+import type { GameAction, GameState } from "@hanabi-live/game";
 import { beforeEach, describe, expect, jest, test } from "@jest/globals";
 import { SoundType } from "../../../types/SoundType";
 import { globals } from "../../UIGlobals";
@@ -54,19 +54,21 @@ describe("OCM sound playback", () => {
     playerIndex: 0,
     suitIndex: 3,
     rank: 1,
-  };
+  } as unknown as GameAction;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    globals.state.replay.states = [previousState, currentState];
-    globals.lobby.settings.soundMove = SoundMove.All;
+    Object.assign(globals.state.replay, { states: [previousState, currentState] });
+    Object.assign(globals.lobby.settings, { soundMove: SoundMove.All });
   });
 
   test.each([
     [true, SoundType.OrderChopMove],
     [false, SoundType.Other],
   ])("convention setting %s yields sound %s", (hyphenated, expected) => {
-    globals.lobby.settings.hyphenatedConventions = hyphenated;
+    Object.assign(globals.lobby.settings, {
+      hyphenatedConventions: hyphenated,
+    });
 
     onNewSoundEffect(
       { gameState: currentState, actions: [action] },
