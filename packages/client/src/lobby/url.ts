@@ -225,4 +225,3 @@ function restoreLobbyHistoryView(): boolean {
     }
   }
 }
-
