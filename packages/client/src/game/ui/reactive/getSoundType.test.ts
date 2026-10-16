@@ -20,7 +20,7 @@ describe("OCM sound", () => {
     positiveColorClues: [],
     numPositiveClues: 1,
     dealtToStartingHand: true,
-  } as CardState;
+  } as unknown as CardState;
 
   const newerOne = {
     order: 1,
@@ -28,7 +28,7 @@ describe("OCM sound", () => {
     positiveColorClues: [],
     numPositiveClues: 1,
     dealtToStartingHand: true,
-  } as CardState;
+  } as unknown as CardState;
 
   const action = {
     type: "play",
