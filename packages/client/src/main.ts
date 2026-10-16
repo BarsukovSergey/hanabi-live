@@ -47,8 +47,6 @@ if (
 initErrorListener();
 
 $(document).ready(() => {
-  // A history entry changes the URL, but does not re-run the route loader.
-  // Reload to restore the matching lobby or pregame screen and server connection.
   globalThis.addEventListener("popstate", () => {
     globalThis.location.reload();
   });
