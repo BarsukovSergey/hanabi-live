@@ -29,13 +29,19 @@ export function parseAndGoto(data: ServerCommandWelcomeData): void {
         return;
       }
     }
-    if (globalThis.location.hash === "#history") {
-      history.show();
-      return;
-    } else if (globalThis.location.hash === "#history-friends") {
-      history.show();
-      history.showFriends();
-      return;
+    switch (globalThis.location.hash) {
+      case "#history": {
+        history.show();
+        return;
+      }
+      case "#history-friends": {
+        history.show();
+        history.showFriends();
+        return;
+      }
+      default: {
+        break;
+      }
     }
   }
 
