@@ -58,7 +58,9 @@ describe("OCM sound playback", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    Object.assign(globals.state.replay, { states: [previousState, currentState] });
+    Object.assign(globals.state.replay, {
+      states: [previousState, currentState],
+    });
     Object.assign(globals.lobby.settings, { soundMove: SoundMove.All });
   });
 
