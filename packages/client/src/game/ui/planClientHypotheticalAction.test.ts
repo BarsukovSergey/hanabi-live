@@ -284,7 +284,7 @@ describe("client hypothetical planning", () => {
         },
         { type: "hypoStart", showDrawnCards: false, actions: [] },
       );
-      const sentActions: GameAction[] = [];
+      const sentActions: Array<{ readonly type: string }> = [];
       const dispatch = jest.fn((action: Action) => {
         storeState = stateReducer(storeState, action);
         if (action.type === "hypoAction") {
