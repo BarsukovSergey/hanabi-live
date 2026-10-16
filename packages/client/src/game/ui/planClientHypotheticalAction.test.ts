@@ -261,6 +261,7 @@ describe("client hypothetical planning", () => {
       ),
     ).toBeNull();
   });
+
   test.each([
     ["play", ActionType.Play],
     ["discard", ActionType.Discard],
