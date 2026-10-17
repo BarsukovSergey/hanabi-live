@@ -9,6 +9,7 @@ import type { HanabiCard } from "./game/ui/HanabiCard";
 import { morphReplayFromModal } from "./game/ui/HanabiCardClick";
 import * as lobbyNav from "./lobby/nav";
 import * as sounds from "./sounds";
+import { getMorphRadioID } from "./getMorphRadioID";
 import { getHTMLElement, getHTMLInputElement } from "./utils";
 
 /** Used by the morph dialog. */
@@ -466,7 +467,7 @@ function fillMorphModalWithRadios(
         cell.classList.add("faded");
       }
       const radio = document.createElement("input");
-      const radioId = `morph-radio-${suit.abbreviation}-${rank}`;
+      const radioId = getMorphRadioID(suitIndex, rank);
 
       radio.setAttribute("type", "radio");
       radio.setAttribute("name", "morph-cards");
