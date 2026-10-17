@@ -1,0 +1,28 @@
+name: Format morph dialog regression
+
+on:
+  push:
+    paths:
+      - ".github/workflows/format-morph-2878.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/workflows/setup
+      - name: Print formatted morph files
+        run: |
+          npx prettier --write packages/client/src/modals.ts packages/client/src/getMorphRadioID.test.ts
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          for tag, file in [
+              ("MODALS", "packages/client/src/modals.ts"),
+              ("TEST", "packages/client/src/getMorphRadioID.test.ts"),
+          ]:
+              print("FORMATTED_" + tag + " " + json.dumps(Path(file).read_text()))
+          PY
