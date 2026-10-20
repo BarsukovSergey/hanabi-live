@@ -180,12 +180,20 @@ describe("client hypothetical planning", () => {
     // After choosing its identity in the morph dialog, the play is valid.
     morphedIdentities[0] = { suitIndex: 0, rank: 1 };
     sendHypotheticalAction({ type: ActionType.Play, target: 0 as CardOrder });
-    expect(dispatch.mock.calls.map(([action]) => action.type)).toEqual([
-      "hypoAction",
-      "hypoAction",
-    ]);
-    expect(dispatch.mock.calls[0]?.[0]).toMatchObject({
-      action: { type: "play", order: 0, suitIndex: 0, rank: 1 },
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    expect(dispatch).toHaveBeenNthCalledWith(1, {
+      type: "hypoAction",
+      action: {
+        type: "play",
+        order: 0,
+        playerIndex: 0,
+        suitIndex: 0,
+        rank: 1,
+      },
+    });
+    expect(dispatch).toHaveBeenNthCalledWith(2, {
+      type: "hypoAction",
+      action: { type: "turn", num: 7, currentPlayerIndex: 1 },
     });
   });
 
