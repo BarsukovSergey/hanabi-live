@@ -172,9 +172,9 @@ describe("client hypothetical planning", () => {
     });
 
     // The spectator does not know this card's identity yet.
-    expect(() =>
-      sendHypotheticalAction({ type: ActionType.Play, target: 0 as CardOrder }),
-    ).not.toThrow();
+    expect(() => {
+      sendHypotheticalAction({ type: ActionType.Play, target: 0 as CardOrder });
+    }).not.toThrow();
     expect(dispatch).not.toHaveBeenCalled();
 
     // After choosing its identity in the morph dialog, the play is valid.
