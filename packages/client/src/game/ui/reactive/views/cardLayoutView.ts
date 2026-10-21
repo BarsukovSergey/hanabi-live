@@ -76,6 +76,7 @@ export function onPlayStackDirectionsChanged(
 
 export function onHandsChanged(hands: GameState["hands"]): void {
   syncChildren(
+    "hands",
     hands,
     (i) => globals.elements.playerHands[i] as unknown as Konva.Container,
     (card, i) => {
@@ -90,6 +91,7 @@ export function onDiscardStacksChanged(
   discardStacks: GameState["discardStacks"],
 ): void {
   syncChildren(
+    "discardStacks",
     discardStacks,
     (i) => {
       const suit = globals.variant.suits[i]!;
@@ -113,6 +115,7 @@ export function onPlayStacksChanged(
   previousPlayStacks: GameState["playStacks"] | undefined,
 ): void {
   syncChildren(
+    "playStacks",
     playStacks,
     (i) => {
       const suit = globals.variant.suits[i]!;
@@ -222,6 +225,7 @@ export function onHoleChanged(
     return;
   }
   syncChildren(
+    "hole",
     [hole],
     () => globals.elements.playStacks.get("hole") as unknown as Konva.Container,
     (card) => {
@@ -241,11 +245,15 @@ export function updatePlayStackVisuals(): void {
 }
 
 function syncChildren(
+  collectionName: "hands" | "discardStacks" | "playStacks" | "hole",
   collections: ReadonlyArray<readonly CardOrder[]>,
   getCollectionUI: (i: number) => Konva.Container,
   addToCollectionUI: (card: HanabiCard, i: number) => void,
 ) {
   for (const [i, collection] of collections.entries()) {
+    const label =
+      collectionName === "hole" ? "hole" : `${collectionName}[${i}]`;
+
     // eslint-disable-next-line func-style
     const getCurrentSorting = () =>
       (getCollectionUI(i).children.toArray() as LayoutChild[])
@@ -279,7 +287,7 @@ function syncChildren(
     for (const [pos, order] of collection.entries()) {
       current = getCurrentSorting();
       if (current.length !== collection.length) {
-        throw new Error("The UI collection is out of sync with the state.");
+        throw cardLayoutSyncError(label, collection, current, "reordering");
       }
 
       const card = getCard(order)!;
@@ -298,9 +306,45 @@ function syncChildren(
     // Verify the final result.
     current = getCurrentSorting();
     if (!equal(current, collection)) {
-      throw new Error("The UI collection is out of sync with the state.");
+      throw cardLayoutSyncError(
+        label,
+        collection,
+        current,
+        "final verification",
+      );
     }
   }
+}
+
+// Include collection and replay context in synchronization errors.
+function cardLayoutSyncError(
+  collection: string,
+  expected: readonly CardOrder[],
+  actual: readonly CardOrder[],
+  phase: "reordering" | "final verification",
+): Error {
+  const state = globals.store?.getState();
+  const replay = state?.replay;
+  const replaySegment =
+    replay?.active === true ? replay.segment : replay?.shared?.segment;
+  let hypothetical = "unknown";
+  if (replay !== undefined) {
+    hypothetical = replay.hypothetical === null ? "inactive" : "active";
+  }
+
+  return new Error(
+    [
+      "The UI collection is out of sync with the state.",
+      `Collection: ${collection}`,
+      `Phase: ${phase}`,
+      `Expected orders: ${JSON.stringify(expected)}`,
+      `Actual orders: ${JSON.stringify(actual)}`,
+      `Game ID: ${replay?.databaseID ?? "unknown"}`,
+      `Visible segment: ${state?.visibleState?.turn.segment ?? "unknown"}`,
+      `Replay segment: ${replaySegment ?? "none"}`,
+      `Hypothetical: ${hypothetical}`,
+    ].join("\n"),
+  );
 }
 
 function getCard(order: CardOrder): HanabiCard | undefined {
