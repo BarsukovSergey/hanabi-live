@@ -339,7 +339,6 @@ describe("nonstandard reversible stack sizes", () => {
     ranks: [1, 2, 3, 4],
   } as const;
 
-
   test("a one-rank Up or Down stack finishes on either 1 or START", () => {
     const start = {
       ...getInitialCardState(0 as CardOrder, ONE_UP_OR_DOWN, NUM_PLAYERS),
