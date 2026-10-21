@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -245,7 +246,36 @@ func TestCatalogCombinedVariantAndSpecialFlags(t *testing.T) {
 		t.Error("Up or Down metadata/rank counts were not loaded")
 	}
 	sudoku := variants["Sudoku (4 Suits)"]
-	if sudoku == nil || !sudoku.IsSudoku() || sudoku.GetDeckSize() != 32 {
+	if sudoku == nil || !sudoku.IsSudoku() || sudoku.StackSize != 4 || sudoku.GetDeckSize() != 32 {
 		t.Error("Sudoku metadata/rank counts were not loaded")
+	}
+}
+
+func TestVariantRanksFollowExplicitMetadata(t *testing.T) {
+	tests := []struct {
+		name      string
+		jsonValue string
+		wantRanks []int
+	}{
+		{"Default", `{"name":"Regular (3 Suits)"}`, []int{1, 2, 3, 4, 5}},
+		{"Non-Sudoku custom stack size", `{"name":"Custom","stackSize":3}`, []int{1, 2, 3}},
+		{"Sudoku four", `{"name":"Arbitrary","sudoku":true,"stackSize":4}`, []int{1, 2, 3, 4}},
+		{"Up or Down with a custom name", `{"name":"Custom","upOrDown":true,"stackSize":3}`, []int{1, 2, 3, StartCardRank}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var metadata VariantJSON
+			if err := json.Unmarshal([]byte(tc.jsonValue), &metadata); err != nil {
+				t.Fatal(err)
+			}
+			stackSize := metadata.StackSize
+			if stackSize == 0 {
+				stackSize = DefaultPointsPerSuit
+			}
+			if got := deriveVariantRanks(stackSize, metadata.UpOrDown); !reflect.DeepEqual(got, tc.wantRanks) {
+				t.Errorf("derived ranks = %v, want %v", got, tc.wantRanks)
+			}
+		})
 	}
 }

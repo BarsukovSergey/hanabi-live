@@ -41,6 +41,7 @@ type VariantJSON struct {
 	Sudoku                   bool      `json:"sudoku"`
 	UpOrDown                 bool      `json:"upOrDown"`
 	CriticalRank             int       `json:"criticalRank"`
+	StackSize                int       `json:"stackSize"`
 	ScarceOnes               bool      `json:"scarceOnes"`
 	AlternatingClues         bool      `json:"alternatingClues"`
 	ClueStarved              bool      `json:"clueStarved"`
@@ -56,6 +57,18 @@ type VariantInfoJSON struct {
 	Suits     []string `json:"suits"`
 	StackSize int      `json:"stackSize"`
 	MaxScore  int      `json:"maxScore"`
+}
+
+// deriveVariantRanks mirrors the rank derivation in packages/game/src/variantsInit.ts.
+func deriveVariantRanks(stackSize int, upOrDown bool) []int {
+	ranks := make([]int, stackSize)
+	for i := range ranks {
+		ranks[i] = i + 1
+	}
+	if upOrDown {
+		ranks = append(ranks, StartCardRank)
+	}
+	return ranks
 }
 
 func variantsInit() {
@@ -114,22 +127,18 @@ func variantsInit() {
 			}
 		}
 
-		// Derive the card ranks (the ranks that the cards of each suit will be)
-		// By default, assume ranks 1 through 5
-		variantRanks := []int{1, 2, 3, 4, 5}
-		if variant.Sudoku {
-			variantRanks = variantRanks[:len(variantSuits)]
+		// The explicit stackSize is authoritative, including for Sudoku variants.
+		// An omitted value means the standard five ranks.
+		stackSize := variant.StackSize
+		if stackSize == 0 {
+			stackSize = DefaultPointsPerSuit
 		}
-		if variant.UpOrDown {
-			// The "Up or Down" variants have START cards
-			// ("startCardRank" is defined in the "variantUpOrDown.go" file)
-			variantRanks = append(variantRanks, StartCardRank)
+		if stackSize < 1 || stackSize > DefaultPointsPerSuit {
+			logger.Fatal("The variant of \"" + variant.Name + "\" has an invalid stack size of " + strconv.Itoa(stackSize) + ".")
+			return
 		}
 
-		stackSize := DefaultPointsPerSuit
-		if variant.Sudoku {
-			stackSize = len(variantSuits)
-		}
+		variantRanks := deriveVariantRanks(stackSize, variant.UpOrDown)
 
 		// Validate or derive the clue colors (the colors available to clue in this variant)
 		clueColors := variant.ClueColors
