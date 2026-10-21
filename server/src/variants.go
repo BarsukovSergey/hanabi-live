@@ -318,6 +318,26 @@ func variantIsCardTouched(variant *Variant, clue Clue, card *Card) bool {
 			return false
 		}
 
+		// Keep the same precedence as isCardTouchedByClueRank in packages/game.
+		// These variant-wide clue rules apply before special-rank rules.
+		if variant.Funnels {
+			// Rank clues in Funnels also touch lower ranked cards.
+			return card.Rank <= clue.Value
+		}
+
+		if variant.Chimneys {
+			// Rank clues in Chimneys also touch higher ranked cards.
+			return card.Rank >= clue.Value
+		}
+
+		if variant.OddsAndEvens {
+			// Clue ranks in Odds and Evens can only be 1 or 2.
+			if clue.Value == 1 {
+				return intInSlice(card.Rank, oddClues)
+			}
+			return intInSlice(card.Rank, evenClues)
+		}
+
 		if variant.SpecialRank == card.Rank {
 			if variant.SpecialRankAllClueRanks {
 				return true
@@ -326,28 +346,10 @@ func variantIsCardTouched(variant *Variant, clue Clue, card *Card) bool {
 				return false
 			}
 			if variant.SpecialRankDeceptive {
-				// The rank that touches a deceptive card is contingent upon the card's suit
+				// The rank that touches a deceptive card is contingent upon the card's suit.
 				deceptiveRank := variant.ClueRanks[card.SuitIndex%len(variant.ClueRanks)]
 				return clue.Value == deceptiveRank
 			}
-		}
-
-		if variant.OddsAndEvens {
-			// Clue ranks in Odds and Evens can only be 1 or 2
-			if clue.Value == 1 {
-				return intInSlice(card.Rank, oddClues)
-			}
-			return intInSlice(card.Rank, evenClues)
-		}
-
-		if variant.Funnels {
-			// Rank clues in Funnels touch also all lower ranked cards
-			return card.Rank <= clue.Value
-		}
-
-		if variant.Chimneys {
-			// Rank clues in Chimneys touch also all higher ranked cards
-			return card.Rank >= clue.Value
 		}
 
 		return clue.Value == card.Rank
