@@ -42,6 +42,12 @@ type VariantJSON struct {
 	UpOrDown                 bool      `json:"upOrDown"`
 	CriticalRank             int       `json:"criticalRank"`
 	ScarceOnes               bool      `json:"scarceOnes"`
+	AlternatingClues         bool      `json:"alternatingClues"`
+	ClueStarved             bool      `json:"clueStarved"`
+	CowAndPig               bool      `json:"cowAndPig"`
+	Duck                    bool      `json:"duck"`
+	ThrowItInAHole          bool      `json:"throwItInAHole"`
+	Synesthesia             bool      `json:"synesthesia"`
 }
 
 // VariantInfoJSON contains limited information about a variant, returned in /api/v1/variants-full
@@ -176,6 +182,14 @@ func variantsInit() {
 			Ranks:                    variantRanks,
 			CriticalRank:             variant.CriticalRank,
 			ScarceOnes:               variant.ScarceOnes,
+			AlternatingClues:         variant.AlternatingClues,
+			ClueStarved:             variant.ClueStarved,
+			CowAndPig:               variant.CowAndPig,
+			Duck:                    variant.Duck,
+			ThrowItInAHole:          variant.ThrowItInAHole,
+			UpOrDown:                variant.UpOrDown,
+			Synesthesia:             variant.Synesthesia,
+			Sudoku:                  variant.Sudoku,
 			ClueColors:               *clueColors,
 			ClueRanks:                *clueRanks,
 			StackSize:                stackSize,
