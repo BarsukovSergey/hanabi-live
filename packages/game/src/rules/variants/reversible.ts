@@ -2,7 +2,7 @@
 // used for "Up Or Down" and "Reversed" variants.
 
 import type { Tuple } from "complete-common";
-import { iRange, newArray } from "complete-common";
+import { newArray } from "complete-common";
 import { START_CARD_RANK } from "../../constants";
 import { StackDirection } from "../../enums/StackDirection";
 import type { CardState } from "../../interfaces/CardState";
@@ -203,7 +203,7 @@ function walkUp(allDiscardedSet: ReadonlySet<Rank>, variant: Variant): number {
   cardsThatCanStillBePlayed++;
 
   // Second, walk upwards.
-  for (const rank of iRange(2, variant.stackSize)) {
+  for (let rank = 2; rank <= variant.stackSize; rank++) {
     if (allDiscardedSet.has(rank as Rank)) {
       break;
     }

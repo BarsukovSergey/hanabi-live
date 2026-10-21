@@ -225,3 +225,17 @@ describe("nonstandard reversible stack sizes", () => {
     expect(ranks).toEqual(new Set([1, 3]));
   });
 });
+
+describe("single-rank reversible stacks", () => {
+  test("START and 1 are the only relevant cards", () => {
+    const ranks = reversibleGetRanksUsefulForMaxScore(
+      // eslint-disable-next-line unicorn/no-null
+      null,
+      new Set<Rank>(),
+      StackDirection.Undecided,
+      true,
+      1,
+    );
+    expect(ranks).toEqual(new Set([1, START_CARD_RANK]));
+  });
+});

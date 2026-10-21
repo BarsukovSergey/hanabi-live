@@ -313,6 +313,16 @@ describe("nextRanks", () => {
 });
 
 describe("nonstandard reversible stack sizes", () => {
+  const ONE_UP_OR_DOWN = {
+    ...UP_OR_DOWN_VARIANT,
+    stackSize: 1,
+    ranks: [1, START_CARD_RANK],
+  } as const;
+  const TWO_UP_OR_DOWN = {
+    ...UP_OR_DOWN_VARIANT,
+    stackSize: 2,
+    ranks: [1, 2, START_CARD_RANK],
+  } as const;
   const THREE_UP_OR_DOWN = {
     ...UP_OR_DOWN_VARIANT,
     stackSize: 3,
@@ -328,6 +338,58 @@ describe("nonstandard reversible stack sizes", () => {
     stackSize: 4,
     ranks: [1, 2, 3, 4],
   } as const;
+
+
+  test("a one-rank Up or Down stack finishes on either 1 or START", () => {
+    const start = {
+      ...getInitialCardState(0 as CardOrder, ONE_UP_OR_DOWN, NUM_PLAYERS),
+      rank: START_CARD_RANK,
+      suitIndex: 0,
+    } as const;
+    const one = { ...start, rank: 1 } as const;
+    expect(
+      getNextPlayableRanks(
+        0,
+        [],
+        StackDirection.Undecided,
+        DEFAULT_PLAY_STACK_STARTS,
+        ONE_UP_OR_DOWN,
+        [],
+      ),
+    ).toStrictEqual([1, START_CARD_RANK]);
+    expect(getStackDirection(0, [0], [start], ONE_UP_OR_DOWN)).toBe(
+      StackDirection.Finished,
+    );
+    expect(getStackDirection(0, [0], [one], ONE_UP_OR_DOWN)).toBe(
+      StackDirection.Finished,
+    );
+  });
+
+  test("a two-rank Up or Down stack can finish after START", () => {
+    const start = {
+      ...getInitialCardState(0 as CardOrder, TWO_UP_OR_DOWN, NUM_PLAYERS),
+      rank: START_CARD_RANK,
+      suitIndex: 0,
+    } as const;
+    const two = { ...start, rank: 2 } as const;
+    const one = { ...start, rank: 1 } as const;
+    expect(
+      getNextPlayableRanks(
+        0,
+        [0],
+        StackDirection.Undecided,
+        DEFAULT_PLAY_STACK_STARTS,
+        TWO_UP_OR_DOWN,
+        [start],
+      ),
+    ).toStrictEqual([2, 1]);
+    expect(getStackDirection(0, [0, 1], [start, two], TWO_UP_OR_DOWN)).toBe(
+      StackDirection.Finished,
+    );
+    expect(getStackDirection(0, [0, 1], [start, one], TWO_UP_OR_DOWN)).toBe(
+      StackDirection.Finished,
+    );
+  });
 
   test("Up or Down with four ranks starts at either endpoint", () => {
     const ranks = getNextPlayableRanks(
