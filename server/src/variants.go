@@ -43,11 +43,11 @@ type VariantJSON struct {
 	CriticalRank             int       `json:"criticalRank"`
 	ScarceOnes               bool      `json:"scarceOnes"`
 	AlternatingClues         bool      `json:"alternatingClues"`
-	ClueStarved             bool      `json:"clueStarved"`
-	CowAndPig               bool      `json:"cowAndPig"`
-	Duck                    bool      `json:"duck"`
-	ThrowItInAHole          bool      `json:"throwItInAHole"`
-	Synesthesia             bool      `json:"synesthesia"`
+	ClueStarved              bool      `json:"clueStarved"`
+	CowAndPig                bool      `json:"cowAndPig"`
+	Duck                     bool      `json:"duck"`
+	ThrowItInAHole           bool      `json:"throwItInAHole"`
+	Synesthesia              bool      `json:"synesthesia"`
 }
 
 // VariantInfoJSON contains limited information about a variant, returned in /api/v1/variants-full

@@ -16,13 +16,13 @@ type Variant struct {
 	CriticalRank             int
 	ScarceOnes               bool
 	AlternatingClues         bool
-	ClueStarved             bool
-	CowAndPig               bool
-	Duck                    bool
-	ThrowItInAHole          bool
-	UpOrDown                bool
-	Synesthesia             bool
-	Sudoku                  bool
+	ClueStarved              bool
+	CowAndPig                bool
+	Duck                     bool
+	ThrowItInAHole           bool
+	UpOrDown                 bool
+	Synesthesia              bool
+	Sudoku                   bool
 	ClueColors               []string
 	ClueRanks                []int
 	StackSize                int
