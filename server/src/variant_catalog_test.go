@@ -41,6 +41,81 @@ func expectedClientCardCopies(meta VariantJSON, suit *Suit, rank int) int {
 	}
 }
 
+// These two reference functions follow packages/game/src/rules/clues.ts.
+// The expected behavior comes from JSON metadata rather than server predicates.
+func expectedClientColorTouch(meta VariantJSON, variant *Variant, suit *Suit, cardRank int, clueColorName string) bool {
+	if meta.ColorCluesTouchNothing {
+		return false
+	}
+	if suit.AllClueColors {
+		return true
+	}
+	if suit.NoClueColors {
+		return false
+	}
+	if meta.Synesthesia && !suit.NoClueRanks && len(variant.ClueColors) > 0 {
+		colorIndex := (cardRank - 1) % len(variant.ClueColors)
+		if variant.ClueColors[colorIndex] == clueColorName {
+			return true
+		}
+	}
+	if cardRank == meta.SpecialRank {
+		if meta.SpecialRankAllClueColors {
+			return true
+		}
+		if meta.SpecialRankNoClueColors {
+			return false
+		}
+	}
+	if suit.Prism && len(variant.ClueColors) > 0 {
+		colorIndex := (cardRank - 1) % len(variant.ClueColors)
+		if cardRank == StartCardRank {
+			colorIndex = len(variant.ClueColors) - 1
+		}
+		return variant.ClueColors[colorIndex] == clueColorName
+	}
+	return stringInSlice(clueColorName, suit.ClueColors)
+}
+
+func expectedClientRankTouch(meta VariantJSON, variant *Variant, suitIndex int, suit *Suit, cardRank int, clueRank int) bool {
+	if meta.RankCluesTouchNothing {
+		return false
+	}
+	if suit.AllClueRanks {
+		return true
+	}
+	if suit.NoClueRanks {
+		return false
+	}
+	if meta.Funnels {
+		return cardRank <= clueRank
+	}
+	if meta.Chimneys {
+		return cardRank >= clueRank
+	}
+	if meta.OddsAndEvens {
+		if clueRank == 1 {
+			return cardRank == 1 || cardRank == 3 || cardRank == 5
+		}
+		return cardRank == 2 || cardRank == 4
+	}
+	if cardRank == meta.SpecialRank {
+		if meta.SpecialRankAllClueRanks {
+			return true
+		}
+		if meta.SpecialRankNoClueRanks {
+			return false
+		}
+		if meta.SpecialRankDeceptive {
+			if len(variant.ClueRanks) == 0 {
+				return false
+			}
+			return clueRank == variant.ClueRanks[suitIndex%len(variant.ClueRanks)]
+		}
+	}
+	return clueRank == cardRank
+}
+
 func TestCatalogMatchesClientVariantMetadata(t *testing.T) {
 	oldPath, oldColors, oldSuits := jsonPath, colors, suits
 	oldVariants, oldIDMap, oldIDFullMap := variants, variantIDMap, variantIDFullMap
@@ -81,6 +156,13 @@ func TestCatalogMatchesClientVariantMetadata(t *testing.T) {
 			got  bool
 			want bool
 		}{
+			{"colorCluesTouchNothing", v.ColorCluesTouchNothing, meta.ColorCluesTouchNothing},
+			{"rankCluesTouchNothing", v.RankCluesTouchNothing, meta.RankCluesTouchNothing},
+			{"specialRankAllClueColors", v.SpecialRankAllClueColors, meta.SpecialRankAllClueColors},
+			{"specialRankAllClueRanks", v.SpecialRankAllClueRanks, meta.SpecialRankAllClueRanks},
+			{"specialRankNoClueColors", v.SpecialRankNoClueColors, meta.SpecialRankNoClueColors},
+			{"specialRankNoClueRanks", v.SpecialRankNoClueRanks, meta.SpecialRankNoClueRanks},
+			{"specialRankDeceptive", v.SpecialRankDeceptive, meta.SpecialRankDeceptive},
 			{"alternatingClues", v.IsAlternatingClues(), meta.AlternatingClues},
 			{"clueStarved", v.IsClueStarved(), meta.ClueStarved},
 			{"cowAndPig", v.IsCowAndPig(), meta.CowAndPig},
@@ -103,6 +185,21 @@ func TestCatalogMatchesClientVariantMetadata(t *testing.T) {
 		if v.CriticalRank != meta.CriticalRank {
 			t.Errorf("%s: critical rank = %d, want %d", meta.Name, v.CriticalRank, meta.CriticalRank)
 		}
+		wantSpecialRank := meta.SpecialRank
+		if wantSpecialRank == 0 {
+			wantSpecialRank = -1
+		}
+		if v.SpecialRank != wantSpecialRank {
+			t.Errorf("%s: special rank = %d, want %d", meta.Name, v.SpecialRank, wantSpecialRank)
+		}
+		wantClueRanks := meta.ClueRanks
+		if wantClueRanks == nil {
+			defaults := []int{1, 2, 3, 4, 5}
+			wantClueRanks = &defaults
+		}
+		if !reflect.DeepEqual(v.ClueRanks, *wantClueRanks) {
+			t.Errorf("%s: clue ranks = %v, want %v", meta.Name, v.ClueRanks, *wantClueRanks)
+		}
 
 		stackSize := meta.StackSize
 		if stackSize == 0 {
@@ -120,6 +217,28 @@ func TestCatalogMatchesClientVariantMetadata(t *testing.T) {
 		}
 		if !reflect.DeepEqual(v.Ranks, wantRanks) {
 			t.Errorf("%s: ranks = %v, want %v", meta.Name, v.Ranks, wantRanks)
+		}
+
+		// Validate clue-touch behavior across every available suit, rank, and clue.
+		// This also checks the rank-modifier precedence for actual catalog variants.
+		for suitIndex, suit := range v.Suits {
+			for _, rank := range v.Ranks {
+				card := NewCard(suitIndex, rank)
+				for colorIndex, colorName := range v.ClueColors {
+					clue := Clue{Type: ClueTypeColor, Value: colorIndex}
+					wantTouch := expectedClientColorTouch(meta, v, suit, rank, colorName)
+					if got := variantIsCardTouched(v, clue, card); got != wantTouch {
+						t.Errorf("%s: suit %s rank %d color %s touches=%v, want %v", meta.Name, suit.Name, rank, colorName, got, wantTouch)
+					}
+				}
+				for _, clueRank := range v.ClueRanks {
+					clue := Clue{Type: ClueTypeRank, Value: clueRank}
+					wantTouch := expectedClientRankTouch(meta, v, suitIndex, suit, rank, clueRank)
+					if got := variantIsCardTouched(v, clue, card); got != wantTouch {
+						t.Errorf("%s: suit %s rank %d clue rank %d touches=%v, want %v", meta.Name, suit.Name, rank, clueRank, got, wantTouch)
+					}
+				}
+			}
 		}
 
 		wantDeckSize := 0
