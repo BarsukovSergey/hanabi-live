@@ -265,8 +265,7 @@ export function reversibleIsCardCritical(
 
   const direction = playStackDirections[suitIndex];
 
-  // START and the endpoint cards are critical if copies of other endpoints are
-  // discarded in an Undecided direction.
+  // Endpoints can become critical if another endpoint has been discarded.
   if (
     (rank === 1 || rank === variant.stackSize || rank === START_CARD_RANK)
     && direction === StackDirection.Undecided

@@ -35,7 +35,11 @@ export function getNextPlayableRanks(
         return [1, variant.stackSize];
       }
 
-      return [...new Set([1, variant.stackSize, START_CARD_RANK])];
+      if (variant.stackSize === 1) {
+        return [1, START_CARD_RANK];
+      }
+
+      return [1, variant.stackSize, START_CARD_RANK];
     }
 
     case StackDirection.Up: {
@@ -129,8 +133,7 @@ export function getStackDirection(
     return firstRank === 1 ? StackDirection.Up : StackDirection.Down;
   }
 
-  // START replaces the endpoint. The following rank reveals the direction,
-  // except for a three-rank stack, where START -> 2 can still go either way.
+  // After START, the second rank normally reveals the direction.
   const secondOrder = playStack[1];
   const secondRank =
     secondOrder === undefined ? undefined : deck[secondOrder]?.rank;

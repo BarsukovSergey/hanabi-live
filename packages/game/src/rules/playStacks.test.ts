@@ -315,19 +315,19 @@ describe("nextRanks", () => {
 describe("nonstandard reversible stack sizes", () => {
   const THREE_UP_OR_DOWN = {
     ...UP_OR_DOWN_VARIANT,
-    stackSize: 3 as const,
-    ranks: [1, 2, 3, START_CARD_RANK] as const,
-  };
+    stackSize: 3,
+    ranks: [1, 2, 3, START_CARD_RANK],
+  } as const;
   const FOUR_UP_OR_DOWN = {
     ...UP_OR_DOWN_VARIANT,
-    stackSize: 4 as const,
-    ranks: [1, 2, 3, 4, START_CARD_RANK] as const,
-  };
+    stackSize: 4,
+    ranks: [1, 2, 3, 4, START_CARD_RANK],
+  } as const;
   const FOUR_REVERSED = {
     ...REVERSED_VARIANT,
-    stackSize: 4 as const,
-    ranks: [1, 2, 3, 4] as const,
-  };
+    stackSize: 4,
+    ranks: [1, 2, 3, 4],
+  } as const;
 
   test("Up or Down with four ranks starts at either endpoint", () => {
     const ranks = getNextPlayableRanks(
@@ -350,10 +350,16 @@ describe("nonstandard reversible stack sizes", () => {
     const two = { ...start, rank: 2 } as const;
     const three = { ...start, rank: 3 } as const;
 
-    expect(getNextPlayableRanks(
-      0, [0], StackDirection.Undecided, DEFAULT_PLAY_STACK_STARTS,
-      FOUR_UP_OR_DOWN, [start],
-    )).toStrictEqual([2, 3]);
+    expect(
+      getNextPlayableRanks(
+        0,
+        [0],
+        StackDirection.Undecided,
+        DEFAULT_PLAY_STACK_STARTS,
+        FOUR_UP_OR_DOWN,
+        [start],
+      ),
+    ).toStrictEqual([2, 3]);
     expect(getStackDirection(0, [0, 1], [start, two], FOUR_UP_OR_DOWN)).toBe(
       StackDirection.Up,
     );
@@ -373,17 +379,29 @@ describe("nonstandard reversible stack sizes", () => {
     const three = { ...start, rank: 3 } as const;
     const deck = [start, two, one, three];
 
-    expect(getNextPlayableRanks(
-      0, [0], StackDirection.Undecided, DEFAULT_PLAY_STACK_STARTS,
-      THREE_UP_OR_DOWN, deck,
-    )).toStrictEqual([2]);
+    expect(
+      getNextPlayableRanks(
+        0,
+        [0],
+        StackDirection.Undecided,
+        DEFAULT_PLAY_STACK_STARTS,
+        THREE_UP_OR_DOWN,
+        deck,
+      ),
+    ).toStrictEqual([2]);
     expect(getStackDirection(0, [0, 1], deck, THREE_UP_OR_DOWN)).toBe(
       StackDirection.Undecided,
     );
-    expect(getNextPlayableRanks(
-      0, [0, 1], StackDirection.Undecided, DEFAULT_PLAY_STACK_STARTS,
-      THREE_UP_OR_DOWN, deck,
-    )).toStrictEqual([1, 3]);
+    expect(
+      getNextPlayableRanks(
+        0,
+        [0, 1],
+        StackDirection.Undecided,
+        DEFAULT_PLAY_STACK_STARTS,
+        THREE_UP_OR_DOWN,
+        deck,
+      ),
+    ).toStrictEqual([1, 3]);
     expect(getStackDirection(0, [0, 1, 2], deck, THREE_UP_OR_DOWN)).toBe(
       StackDirection.Finished,
     );
@@ -396,9 +414,15 @@ describe("nonstandard reversible stack sizes", () => {
     expect(getStackDirection(5, [], [], FOUR_REVERSED)).toBe(
       StackDirection.Down,
     );
-    expect(getNextPlayableRanks(
-      5, [], StackDirection.Down, DEFAULT_PLAY_STACK_STARTS_REVERSED,
-      FOUR_REVERSED, [],
-    )).toStrictEqual([4]);
+    expect(
+      getNextPlayableRanks(
+        5,
+        [],
+        StackDirection.Down,
+        DEFAULT_PLAY_STACK_STARTS_REVERSED,
+        FOUR_REVERSED,
+        [],
+      ),
+    ).toStrictEqual([4]);
   });
 });
