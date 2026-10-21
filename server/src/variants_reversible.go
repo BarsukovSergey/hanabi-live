@@ -14,65 +14,79 @@ const (
 )
 
 func variantReversiblePlay(g *Game, c *Card) bool {
-	// Local variables
 	variant := g.Variant
+	finalRank := variant.StackSize
+	lastRank := g.Stacks[c.SuitIndex]
+	direction := &g.PlayStackDirections[c.SuitIndex]
 
-	var failed bool
-	if g.PlayStackDirections[c.SuitIndex] == StackDirectionUndecided {
-		// If the stack direction is undecided,
-		// then there is either no cards played or a "START" card has been played
-		if g.Stacks[c.SuitIndex] == 0 {
-			// No cards have been played yet on this stack
-			failed = c.Rank != 1 && c.Rank != 5 && c.Rank != StartCardRank
-
-			// Set the stack direction
-			if !failed {
-				if c.Rank == 1 {
-					g.PlayStackDirections[c.SuitIndex] = StackDirectionUp
-				} else if c.Rank == 5 {
-					g.PlayStackDirections[c.SuitIndex] = StackDirectionDown
-				}
-				// If the "START" card was played, we want to keep the stack direction undecided
+	switch *direction {
+	case StackDirectionUndecided:
+		if lastRank == 0 {
+			if c.Rank != 1 && c.Rank != finalRank && c.Rank != StartCardRank {
+				return true
 			}
-		} else if g.Stacks[c.SuitIndex] == StartCardRank {
-			// The "START" card has been played on the stack
-			failed = c.Rank != 2 && c.Rank != 4
+			switch {
+			case finalRank == 1:
+				*direction = StackDirectionFinished
+			case c.Rank == 1:
+				*direction = StackDirectionUp
+			case c.Rank == finalRank:
+				*direction = StackDirectionDown
+			}
+			return false
+		}
 
-			// Set the stack direction
-			if !failed {
-				if c.Rank == 2 {
-					g.PlayStackDirections[c.SuitIndex] = StackDirectionUp
-				} else if c.Rank == 4 {
-					g.PlayStackDirections[c.SuitIndex] = StackDirectionDown
-				}
+		if lastRank == StartCardRank {
+			if c.Rank != 2 && c.Rank != finalRank-1 {
+				return true
+			}
+			switch {
+			case finalRank == 2:
+				// START plus either endpoint completes the two-rank stack.
+				*direction = StackDirectionFinished
+			case c.Rank == 2 && c.Rank == finalRank-1:
+				// For three ranks, START -> 2 can still go up or down.
+			case c.Rank == 2:
+				*direction = StackDirectionUp
+			default:
+				*direction = StackDirectionDown
+			}
+			return false
+		}
+
+		if finalRank == 3 && lastRank == 2 {
+			// Complete either direction after the ambiguous START -> 2.
+			if c.Rank == 1 || c.Rank == finalRank {
+				*direction = StackDirectionFinished
+				return false
 			}
 		}
-	} else if g.PlayStackDirections[c.SuitIndex] == StackDirectionUp {
-		failed = c.Rank != g.Stacks[c.SuitIndex]+1
+		return true
 
-		// Set the stack direction
-		if !failed && c.Rank == 5 {
-			g.PlayStackDirections[c.SuitIndex] = StackDirectionFinished
+	case StackDirectionUp:
+		if c.Rank != lastRank+1 {
+			return true
 		}
-	} else if g.PlayStackDirections[c.SuitIndex] == StackDirectionDown {
-		if !variant.IsUpOrDown() && g.Stacks[c.SuitIndex] == 0 {
-			// The first card in a down stack must be a 5
-			// except on "Up or Down", where the stack direction starts Undecided
-			failed = c.Rank != 5
-		} else {
-			failed = c.Rank != g.Stacks[c.SuitIndex]-1
+		if c.Rank == finalRank {
+			*direction = StackDirectionFinished
 		}
+		return false
 
-		// Set the stack direction
-		if !failed && c.Rank == 1 {
-			g.PlayStackDirections[c.SuitIndex] = StackDirectionFinished
+	case StackDirectionDown:
+		nextRank := lastRank - 1
+		if !variant.IsUpOrDown() && lastRank == 0 {
+			nextRank = finalRank
 		}
-	} else if g.PlayStackDirections[c.SuitIndex] == StackDirectionFinished {
-		// Once a stack is finished, any card that is played will fail to play
-		failed = true
+		if c.Rank != nextRank {
+			return true
+		}
+		if c.Rank == 1 {
+			*direction = StackDirectionFinished
+		}
+		return false
 	}
 
-	return failed
+	return true
 }
 
 // variantReversibleGetMaxScore calculates what the maximum score is,
@@ -83,14 +97,9 @@ func variantReversibleGetMaxScore(g *Game) int {
 
 	maxScore := 0
 	for suitIndex := range g.Stacks {
-		// Make a map that shows if all of some particular rank in this suit has been discarded
-		ranks := []int{1, 2, 3, 4, 5}
-		if variant.IsUpOrDown() {
-			ranks = append(ranks, StartCardRank)
-		}
-
+		// Check every rank available in the current variant, including START.
 		allDiscarded := make(map[int]bool)
-		for _, rank := range ranks {
+		for _, rank := range variant.Ranks {
 			total, discarded := g.GetSpecificCardNum(suitIndex, rank)
 			allDiscarded[rank] = total == discarded
 		}
@@ -133,7 +142,7 @@ func variantReversibleWalkUp(g *Game, allDiscarded map[int]bool) int {
 	cardsThatCanStillBePlayed++
 
 	// Second, walk upwards
-	for rank := 2; rank <= 5; rank++ {
+	for rank := 2; rank <= variant.StackSize; rank++ {
 		if allDiscarded[rank] {
 			break
 		}
@@ -152,12 +161,12 @@ func variantReversibleWalkDown(g *Game, allDiscarded map[int]bool) int {
 
 	// First, check to see if the stack can still be started
 	if variant.IsUpOrDown() {
-		if allDiscarded[5] && allDiscarded[StartCardRank] {
+		if allDiscarded[variant.StackSize] && allDiscarded[StartCardRank] {
 			// In "Up or Down" variants, you can start with 5 or START when going down
 			return 0
 		}
 	} else {
-		if allDiscarded[5] {
+		if allDiscarded[variant.StackSize] {
 			// Otherwise, only 5
 			return 0
 		}
@@ -165,7 +174,7 @@ func variantReversibleWalkDown(g *Game, allDiscarded map[int]bool) int {
 	cardsThatCanStillBePlayed++
 
 	// Second, walk downwards
-	for rank := 4; rank >= 1; rank-- {
+	for rank := variant.StackSize - 1; rank >= 1; rank-- {
 		if allDiscarded[rank] {
 			break
 		}
@@ -185,17 +194,20 @@ func variantReversibleCheckAllDead(g *Game) bool {
 		if g.PlayStackDirections[suitIndex] == StackDirectionUndecided {
 			if stackRank == 0 {
 				// Nothing is played on the stack
-				neededRanks = []int{1, 5, StartCardRank}
+				neededRanks = []int{1, variant.StackSize, StartCardRank}
 			} else if stackRank == StartCardRank {
-				// The "START" card is played on the stack
-				neededRanks = []int{2, 4}
+				// The START card is played; either direction may be chosen.
+				neededRanks = []int{2, variant.StackSize - 1}
+			} else if variant.StackSize == 3 && stackRank == 2 {
+				// START -> 2 leaves both directions available on three ranks.
+				neededRanks = []int{1, variant.StackSize}
 			}
 		} else if g.PlayStackDirections[suitIndex] == StackDirectionUp {
 			neededRanks = append(neededRanks, stackRank+1)
 		} else if g.PlayStackDirections[suitIndex] == StackDirectionDown {
 			if !variant.IsUpOrDown() && stackRank == 0 {
-				// On "Reversed", the Down stacks start with 5
-				neededRanks = []int{5}
+				// Reversed stacks start at the highest rank.
+				neededRanks = []int{variant.StackSize}
 			} else {
 				neededRanks = append(neededRanks, stackRank-1)
 			}

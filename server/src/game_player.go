@@ -167,17 +167,8 @@ func (p *GamePlayer) PlayCard(c *Card) {
 	})
 	t.NotifyGameAction()
 
-	// Give the team a clue if the final card of the suit was played
-	// (this will always be a 5 unless it is a custom variant)
-	extraClue := c.Rank == 5
-
-	// Handle custom variants that do not play in order from 1 to 5
-	if variant.HasReversedSuits() {
-		extraClue = (c.Rank == 5 || c.Rank == 1) &&
-			g.PlayStackDirections[c.SuitIndex] == StackDirectionFinished
-	} else if variant.IsSudoku() {
-		extraClue = g.PlayStackDirections[c.SuitIndex] == StackDirectionFinished
-	}
+	// Award the extra clue when the final card of a stack was played.
+	extraClue := shouldAwardClueForStack(variant, c.Rank, g.PlayStackDirections[c.SuitIndex])
 
 	if extraClue {
 		// Some variants do not grant an extra clue when successfully playing a 5
@@ -207,6 +198,19 @@ func (p *GamePlayer) PlayCard(c *Card) {
 		// Decrease the maximum score possible for this game
 		g.MaxScore = newMaxScore
 	}
+}
+
+// shouldAwardClueForStack handles nonstandard rank limits and playing directions.
+func shouldAwardClueForStack(variant *Variant, rank int, direction int) bool {
+	if variant.HasReversedSuits() {
+		return direction == StackDirectionFinished &&
+			(rank == variant.StackSize || rank == 1 ||
+				(variant.StackSize == 1 && rank == StartCardRank))
+	}
+	if variant.IsSudoku() {
+		return direction == StackDirectionFinished
+	}
+	return rank == variant.StackSize
 }
 
 func (p *GamePlayer) DiscardCard(c *Card) {

@@ -25,9 +25,17 @@ export function getNextPlayableRanks(
 
   switch (playStackDirection) {
     case StackDirection.Undecided: {
-      return currentlyPlayedRank === START_CARD_RANK
-        ? [2, 4]
-        : [1, 5, START_CARD_RANK];
+      if (currentlyPlayedRank === START_CARD_RANK) {
+        return [...new Set([2, variant.stackSize - 1])];
+      }
+
+      // With a three-rank stack, START -> 2 is still undecided:
+      // playing either endpoint determines the direction and finishes the stack.
+      if (currentlyPlayedRank !== null) {
+        return [1, variant.stackSize];
+      }
+
+      return [...new Set([1, variant.stackSize, START_CARD_RANK])];
     }
 
     case StackDirection.Up: {
@@ -59,9 +67,10 @@ export function getNextPlayableRanks(
     }
 
     case StackDirection.Down: {
-      // In non-Sudoku variants, the next playable card is 5 if the stack is not stared yet or the
-      // N-1 rank.
-      return currentlyPlayedRank === null ? [5] : [currentlyPlayedRank - 1];
+      // In non-Sudoku variants, start at the highest rank and play downward.
+      return currentlyPlayedRank === null
+        ? [variant.stackSize]
+        : [currentlyPlayedRank - 1];
     }
 
     case StackDirection.Finished: {
@@ -111,32 +120,28 @@ export function getStackDirection(
     return suit.reversed ? StackDirection.Down : StackDirection.Up;
   }
 
-  const top = getLastPlayedRank(playStack, deck);
-  if (top === null || top === START_CARD_RANK) {
+  const firstRank = getStackStartRank(playStack, deck);
+  if (firstRank === null) {
+    return StackDirection.Undecided;
+  }
+  if (firstRank !== START_CARD_RANK) {
+    // A regular Up or Down stack starts at either endpoint.
+    return firstRank === 1 ? StackDirection.Up : StackDirection.Down;
+  }
+
+  // START replaces the endpoint. The following rank reveals the direction,
+  // except for a three-rank stack, where START -> 2 can still go either way.
+  const secondOrder = playStack[1];
+  const secondRank =
+    secondOrder === undefined ? undefined : deck[secondOrder]?.rank;
+  if (secondRank === undefined) {
+    return StackDirection.Undecided;
+  }
+  if (secondRank === 2 && secondRank === variant.stackSize - 1) {
     return StackDirection.Undecided;
   }
 
-  // e.g. If top is 4 and there are 2 cards on the stack, it's going down.
-  if (top !== playStack.length) {
-    return StackDirection.Down;
-  }
-
-  if (top !== 3) {
-    return StackDirection.Up;
-  }
-
-  // The only remaining case is if the top is 3, in which case there will always be 3 cards.
-  const secondCardOrder = playStack[1];
-  if (secondCardOrder === undefined) {
-    return StackDirection.Up;
-  }
-
-  const secondCard = deck[secondCardOrder];
-  if (secondCard === undefined) {
-    return StackDirection.Up;
-  }
-
-  return secondCard.rank === 2 ? StackDirection.Up : StackDirection.Down;
+  return secondRank === 2 ? StackDirection.Up : StackDirection.Down;
 }
 
 /** Returns the rank of the bottom card of the stack. */

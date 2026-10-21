@@ -45,49 +45,34 @@ export function getNumCopiesOfCard(
     return 2;
   }
 
-  switch (rank) {
-    case 1: {
-      if (variant.upOrDown || suit.reversed) {
-        return 1;
-      }
-
-      if (variant.scarceOnes) {
-        return 2;
-      }
-
-      return 3;
-    }
-
-    case 2: {
-      return 2;
-    }
-
-    case 3: {
-      return 2;
-    }
-
-    case 4: {
-      return 2;
-    }
-
-    case 5: {
-      if (suit.reversed) {
-        return 3;
-      }
-
+  if (rank === START_CARD_RANK) {
+    if (variant.upOrDown) {
       return 1;
     }
 
-    case START_CARD_RANK: {
-      if (variant.upOrDown) {
-        return 1;
-      }
-
-      throw new Error(
-        "Attempted to add a START card to a variant that is not Up or Down.",
-      );
-    }
+    throw new Error(
+      "Attempted to add a START card to a variant that is not Up or Down.",
+    );
   }
+
+  if (rank === 1) {
+    if (variant.upOrDown || suit.reversed) {
+      return 1;
+    }
+
+    if (variant.scarceOnes) {
+      return 2;
+    }
+
+    return 3;
+  }
+
+  // For a shorter stack the highest rank takes the role of the normal 5.
+  if (rank === variant.stackSize) {
+    return suit.reversed ? 3 : 1;
+  }
+
+  return 2;
 }
 
 /** Returns how many cards of a specific suit/rank that have been already discarded. */

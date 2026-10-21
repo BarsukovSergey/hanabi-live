@@ -40,6 +40,7 @@ export function reversibleIsCardNeededForMaxScore(
     allDiscardedSet,
     direction,
     variant.upOrDown,
+    variant.stackSize,
   );
   return usefulRanks.has(rank);
 }
@@ -49,6 +50,7 @@ export function reversibleGetRanksUsefulForMaxScore(
   allDiscardedSet: ReadonlySet<Rank>,
   direction: StackDirection | undefined,
   upOrDown: boolean,
+  stackSize: number,
 ): ReadonlySet<Rank> {
   if (direction === StackDirection.Undecided) {
     const upSet = reversibleGetRanksUsefulForMaxScore(
@@ -56,12 +58,14 @@ export function reversibleGetRanksUsefulForMaxScore(
       allDiscardedSet,
       StackDirection.Up,
       upOrDown,
+      stackSize,
     );
     const downSet = reversibleGetRanksUsefulForMaxScore(
       lastPlayed,
       allDiscardedSet,
       StackDirection.Down,
       upOrDown,
+      stackSize,
     );
     return new Set<Rank>([...upSet, ...downSet]);
   }
@@ -87,7 +91,7 @@ export function reversibleGetRanksUsefulForMaxScore(
       nextToPlay = lastPlayed + 1;
     }
     // Then we walk up from `nextToPlay` (at least 2 as we dealt with S and 1 already):
-    for (let rank = nextToPlay; rank <= 5; rank++) {
+    for (let rank = nextToPlay; rank <= stackSize; rank++) {
       if (allDiscardedSet.has(rank as Rank)) {
         break;
       }
@@ -98,14 +102,14 @@ export function reversibleGetRanksUsefulForMaxScore(
   // Same logic than Up, but reversed.
   if (direction === StackDirection.Down) {
     if (
-      allDiscardedSet.has(5)
+      allDiscardedSet.has(stackSize as Rank)
       && (!upOrDown || allDiscardedSet.has(START_CARD_RANK))
     ) {
       return ranksSet;
     }
-    let nextToPlay = 4;
+    let nextToPlay = stackSize - 1;
     if (lastPlayed === null) {
-      ranksSet.add(5);
+      ranksSet.add(stackSize as Rank);
       if (upOrDown) {
         ranksSet.add(START_CARD_RANK);
       }
@@ -199,7 +203,7 @@ function walkUp(allDiscardedSet: ReadonlySet<Rank>, variant: Variant): number {
   cardsThatCanStillBePlayed++;
 
   // Second, walk upwards.
-  for (const rank of iRange(2, 5)) {
+  for (const rank of iRange(2, variant.stackSize)) {
     if (allDiscardedSet.has(rank as Rank)) {
       break;
     }
@@ -215,18 +219,21 @@ function walkDown(allDiscardedSet: ReadonlySet<Rank>, variant: Variant) {
 
   // First, check to see if the stack can still be started.
   if (variant.upOrDown) {
-    if (allDiscardedSet.has(5) && allDiscardedSet.has(START_CARD_RANK)) {
+    if (
+      allDiscardedSet.has(variant.stackSize)
+      && allDiscardedSet.has(START_CARD_RANK)
+    ) {
       // In "Up or Down" variants, you can start with 5 or START when going down.
       return 0;
     }
-  } else if (allDiscardedSet.has(5)) {
+  } else if (allDiscardedSet.has(variant.stackSize)) {
     // Otherwise, only 5.
     return 0;
   }
   cardsThatCanStillBePlayed++;
 
   // Second, walk downwards.
-  for (let rank = 4; rank >= 1; rank--) {
+  for (let rank = variant.stackSize - 1; rank >= 1; rank--) {
     if (allDiscardedSet.has(rank as Rank)) {
       break;
     }
@@ -258,25 +265,25 @@ export function reversibleIsCardCritical(
 
   const direction = playStackDirections[suitIndex];
 
-  // The START, 1's and 5's are critical if all copies of either of the other two cards are
+  // START and the endpoint cards are critical if copies of other endpoints are
   // discarded in an Undecided direction.
   if (
-    (rank === 1 || rank === 5 || rank === START_CARD_RANK)
+    (rank === 1 || rank === variant.stackSize || rank === START_CARD_RANK)
     && direction === StackDirection.Undecided
   ) {
     return (
       isAllDiscarded(suitIndex, START_CARD_RANK)
       || isAllDiscarded(suitIndex, 1)
-      || isAllDiscarded(suitIndex, 5)
+      || isAllDiscarded(suitIndex, variant.stackSize)
     );
   }
 
-  // 1's and 5's are critical to end if the direction requires them in the end.
+  // Endpoint cards are critical when the direction requires them to finish.
   if (rank === 1) {
     return direction === StackDirection.Down;
   }
 
-  if (rank === 5) {
+  if (rank === variant.stackSize) {
     return direction === StackDirection.Up;
   }
 

@@ -279,3 +279,48 @@ func TestVariantRanksFollowExplicitMetadata(t *testing.T) {
 		})
 	}
 }
+
+func TestVariableStackSizeDeckCounts(t *testing.T) {
+	tests := []struct {
+		name      string
+		stackSize int
+		upOrDown  bool
+		reversed  bool
+		want      []int
+	}{
+		{"normal four", 4, false, false, []int{3, 2, 2, 1}},
+		{"reversed four", 4, false, true, []int{1, 2, 2, 3}},
+		{"Up or Down four", 4, true, false, []int{1, 2, 2, 1, 1}},
+		{"Up or Down three", 3, true, false, []int{1, 2, 1, 1}},
+		{"Up or Down two", 2, true, false, []int{1, 1, 1}},
+		{"Up or Down one", 1, true, false, []int{1, 1}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			variant := &Variant{
+				Name:      "Custom variant without rule keywords",
+				StackSize: tc.stackSize,
+				UpOrDown:  tc.upOrDown,
+				Suits:     []*Suit{{Reversed: tc.reversed}},
+				Ranks:     deriveVariantRanks(tc.stackSize, tc.upOrDown),
+			}
+			wantTotal := 0
+			for i, rank := range variant.Ranks {
+				got := numCopiesOfCard(variant.Suits[0], rank, variant)
+				if got != tc.want[i] {
+					t.Errorf("rank %d: copies = %d, want %d", rank, got, tc.want[i])
+				}
+				wantTotal += tc.want[i]
+			}
+			game := &Game{Variant: variant, ExtraOptions: &ExtraOptions{}}
+			game.InitDeck()
+			if got := variant.GetDeckSize(); got != wantTotal {
+				t.Errorf("GetDeckSize = %d, want %d", got, wantTotal)
+			}
+			if got := len(game.Deck); got != wantTotal {
+				t.Errorf("InitDeck added %d cards, want %d", got, wantTotal)
+			}
+		})
+	}
+}

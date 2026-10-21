@@ -17,8 +17,13 @@ func expectedClientCardCopies(meta VariantJSON, suit *Suit, rank int) int {
 	if meta.Sudoku {
 		return 2
 	}
-	switch rank {
-	case 1:
+	if rank == StartCardRank {
+		if meta.UpOrDown {
+			return 1
+		}
+		return -1
+	}
+	if rank == 1 {
 		if meta.UpOrDown || suit.Reversed {
 			return 1
 		}
@@ -26,19 +31,18 @@ func expectedClientCardCopies(meta VariantJSON, suit *Suit, rank int) int {
 			return 2
 		}
 		return 3
-	case 5:
+	}
+	stackSize := meta.StackSize
+	if stackSize == 0 {
+		stackSize = DefaultPointsPerSuit
+	}
+	if rank == stackSize {
 		if suit.Reversed {
 			return 3
 		}
 		return 1
-	case StartCardRank:
-		if meta.UpOrDown {
-			return 1
-		}
-		return -1
-	default:
-		return 2
 	}
+	return 2
 }
 
 // These two reference functions follow packages/game/src/rules/clues.ts.

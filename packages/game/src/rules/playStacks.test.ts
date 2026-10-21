@@ -311,3 +311,94 @@ describe("nextRanks", () => {
     expect(nextRanksArray).toStrictEqual([2, 4]);
   });
 });
+
+describe("nonstandard reversible stack sizes", () => {
+  const THREE_UP_OR_DOWN = {
+    ...UP_OR_DOWN_VARIANT,
+    stackSize: 3 as const,
+    ranks: [1, 2, 3, START_CARD_RANK] as const,
+  };
+  const FOUR_UP_OR_DOWN = {
+    ...UP_OR_DOWN_VARIANT,
+    stackSize: 4 as const,
+    ranks: [1, 2, 3, 4, START_CARD_RANK] as const,
+  };
+  const FOUR_REVERSED = {
+    ...REVERSED_VARIANT,
+    stackSize: 4 as const,
+    ranks: [1, 2, 3, 4] as const,
+  };
+
+  test("Up or Down with four ranks starts at either endpoint", () => {
+    const ranks = getNextPlayableRanks(
+      0,
+      [],
+      StackDirection.Undecided,
+      DEFAULT_PLAY_STACK_STARTS,
+      FOUR_UP_OR_DOWN,
+      [],
+    );
+    expect(ranks).toStrictEqual([1, 4, START_CARD_RANK]);
+  });
+
+  test("START in four-rank Up or Down accepts either direction", () => {
+    const start = {
+      ...getInitialCardState(0 as CardOrder, FOUR_UP_OR_DOWN, NUM_PLAYERS),
+      rank: START_CARD_RANK,
+      suitIndex: 0,
+    } as const;
+    const two = { ...start, rank: 2 } as const;
+    const three = { ...start, rank: 3 } as const;
+
+    expect(getNextPlayableRanks(
+      0, [0], StackDirection.Undecided, DEFAULT_PLAY_STACK_STARTS,
+      FOUR_UP_OR_DOWN, [start],
+    )).toStrictEqual([2, 3]);
+    expect(getStackDirection(0, [0, 1], [start, two], FOUR_UP_OR_DOWN)).toBe(
+      StackDirection.Up,
+    );
+    expect(getStackDirection(0, [0, 1], [start, three], FOUR_UP_OR_DOWN)).toBe(
+      StackDirection.Down,
+    );
+  });
+
+  test("START -> 2 stays undecided on three ranks", () => {
+    const start = {
+      ...getInitialCardState(0 as CardOrder, THREE_UP_OR_DOWN, NUM_PLAYERS),
+      rank: START_CARD_RANK,
+      suitIndex: 0,
+    } as const;
+    const two = { ...start, rank: 2 } as const;
+    const one = { ...start, rank: 1 } as const;
+    const three = { ...start, rank: 3 } as const;
+    const deck = [start, two, one, three];
+
+    expect(getNextPlayableRanks(
+      0, [0], StackDirection.Undecided, DEFAULT_PLAY_STACK_STARTS,
+      THREE_UP_OR_DOWN, deck,
+    )).toStrictEqual([2]);
+    expect(getStackDirection(0, [0, 1], deck, THREE_UP_OR_DOWN)).toBe(
+      StackDirection.Undecided,
+    );
+    expect(getNextPlayableRanks(
+      0, [0, 1], StackDirection.Undecided, DEFAULT_PLAY_STACK_STARTS,
+      THREE_UP_OR_DOWN, deck,
+    )).toStrictEqual([1, 3]);
+    expect(getStackDirection(0, [0, 1, 2], deck, THREE_UP_OR_DOWN)).toBe(
+      StackDirection.Finished,
+    );
+    expect(getStackDirection(0, [0, 1, 3], deck, THREE_UP_OR_DOWN)).toBe(
+      StackDirection.Finished,
+    );
+  });
+
+  test("four-rank Reversed starts at rank four, not five", () => {
+    expect(getStackDirection(5, [], [], FOUR_REVERSED)).toBe(
+      StackDirection.Down,
+    );
+    expect(getNextPlayableRanks(
+      5, [], StackDirection.Down, DEFAULT_PLAY_STACK_STARTS_REVERSED,
+      FOUR_REVERSED, [],
+    )).toStrictEqual([4]);
+  });
+});

@@ -19,6 +19,7 @@ describe("upOrDownDeadCardsDirectionUndecided", () => {
       allDiscardedSet,
       StackDirection.Undecided,
       true,
+      5,
     );
     expect(ranks).toEqual(new Set([1, 2, 3, 4, 5, START_CARD_RANK]));
   });
@@ -31,6 +32,7 @@ describe("upOrDownDeadCardsDirectionUndecided", () => {
         allDiscardedSet,
         StackDirection.Undecided,
         true,
+        5,
       );
       expect(ranks).toEqual(new Set([1, 2, 3, 4, 5, START_CARD_RANK]));
     }
@@ -42,6 +44,7 @@ describe("upOrDownDeadCardsDirectionUndecided", () => {
       allDiscardedSet,
       StackDirection.Up,
       true,
+      5,
     );
     expect(ranks).toEqual(new Set([4, 5]));
   });
@@ -52,6 +55,7 @@ describe("upOrDownDeadCardsDirectionUndecided", () => {
       allDiscardedSet,
       StackDirection.Down,
       true,
+      5,
     );
     expect(ranks).toEqual(new Set([3, 4]));
   });
@@ -63,6 +67,7 @@ describe("upOrDownDeadCardsDirectionUndecided", () => {
       allDiscardedSet,
       StackDirection.Undecided,
       true,
+      5,
     );
     expect(ranks).toEqual(new Set([1, 5, START_CARD_RANK]));
   });
@@ -73,6 +78,7 @@ describe("upOrDownDeadCardsDirectionUndecided", () => {
       allDiscardedSet,
       StackDirection.Undecided,
       true,
+      5,
     );
     expect(ranks).toEqual(new Set());
   });
@@ -83,6 +89,7 @@ describe("upOrDownDeadCardsDirectionUndecided", () => {
       allDiscardedSet,
       StackDirection.Undecided,
       true,
+      5,
     );
     expect(ranks).toEqual(new Set([3, 4]));
   });
@@ -93,6 +100,7 @@ describe("upOrDownDeadCardsDirectionUndecided", () => {
       allDiscardedSet,
       StackDirection.Undecided,
       true,
+      5,
     );
     expect(ranks).toEqual(new Set([2, 4]));
   });
@@ -104,6 +112,7 @@ describe("upOrDownDeadCardsDirectionUndecided", () => {
       allDiscardedSet,
       StackDirection.Undecided,
       true,
+      5,
     );
     expect(ranks).toEqual(new Set([1, START_CARD_RANK]));
   });
@@ -117,6 +126,7 @@ describe("fixed reversed suits cannot start after their starting card is discard
       new Set<Rank>([5]),
       StackDirection.Down,
       false,
+      5,
     );
     expect(ranks).toEqual(new Set());
   });
@@ -128,6 +138,7 @@ describe("fixed reversed suits cannot start after their starting card is discard
       new Set<Rank>([1]),
       StackDirection.Up,
       false,
+      5,
     );
     expect(ranks).toEqual(new Set());
   });
@@ -175,5 +186,42 @@ describe("Dark Prism Reversed card status (#3047)", () => {
         ),
       ).toBe(CardStatus.Trash);
     }
+  });
+});
+
+describe("nonstandard reversible stack sizes", () => {
+  test("four-rank Up or Down keeps only ranks through the stack size", () => {
+    const ranks = reversibleGetRanksUsefulForMaxScore(
+      // eslint-disable-next-line unicorn/no-null
+      null,
+      new Set<Rank>(),
+      StackDirection.Undecided,
+      true,
+      4,
+    );
+    expect(ranks).toEqual(new Set([1, 2, 3, 4, START_CARD_RANK]));
+  });
+
+  test("discarding the last rank of a four-rank reversed stack makes it dead", () => {
+    const ranks = reversibleGetRanksUsefulForMaxScore(
+      // eslint-disable-next-line unicorn/no-null
+      null,
+      new Set<Rank>([4]),
+      StackDirection.Down,
+      false,
+      4,
+    );
+    expect(ranks).toEqual(new Set());
+  });
+
+  test("START -> 2 on three ranks can still finish in either direction", () => {
+    const ranks = reversibleGetRanksUsefulForMaxScore(
+      2,
+      new Set<Rank>(),
+      StackDirection.Undecided,
+      true,
+      3,
+    );
+    expect(ranks).toEqual(new Set([1, 3]));
   });
 });

@@ -67,7 +67,7 @@ func numCopiesOfCard(suit *Suit, rank int, variant *Variant) int {
 		return 3
 	}
 
-	if rank == 5 {
+	if rank == variant.StackSize {
 		if suit.Reversed {
 			return 3
 		}

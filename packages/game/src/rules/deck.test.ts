@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from "@jest/globals";
 import { getDefaultVariant, getVariant } from "../gameData";
-import { getTotalCardsInDeck } from "./deck";
+import { getNumCopiesOfCard, getTotalCardsInDeck } from "./deck";
 
 const DEFAULT_VARIANT = getDefaultVariant();
 
@@ -57,5 +57,54 @@ describe("getTotalCardsInDeck", () => {
 
     expect(getTotalCardsInDeck(blackAndDarkOrange)).toBe(50);
     expect(getTotalCardsInDeck(scarceAndCriticalFours)).toBe(48);
+  });
+});
+
+describe("shortened decks", () => {
+  test("a four-rank normal deck has 8 cards per suit", () => {
+    const variant = {
+      ...DEFAULT_VARIANT,
+      stackSize: 4 as const,
+      ranks: [1, 2, 3, 4] as const,
+    };
+    const suit = variant.suits[0];
+    expect(suit).toBeDefined();
+    if (suit === undefined) {
+      return;
+    }
+    expect(getNumCopiesOfCard(suit, 4, variant)).toBe(1);
+    expect(getTotalCardsInDeck(variant)).toBe(40);
+  });
+
+  test("four-rank reversed suits have three copies of rank four", () => {
+    const variant = {
+      ...getVariant("Reversed (6 Suits)"),
+      stackSize: 4 as const,
+      ranks: [1, 2, 3, 4] as const,
+    };
+    const reversedSuit = variant.suits.find((suit) => suit.reversed);
+    expect(reversedSuit).toBeDefined();
+    if (reversedSuit === undefined) {
+      return;
+    }
+    expect(getNumCopiesOfCard(reversedSuit, 1, variant)).toBe(1);
+    expect(getNumCopiesOfCard(reversedSuit, 4, variant)).toBe(3);
+    expect(getTotalCardsInDeck(variant)).toBe(48);
+  });
+
+  test("three-rank Up or Down uses the third rank as the final rank", () => {
+    const variant = {
+      ...getVariant("Up or Down (6 Suits)"),
+      stackSize: 3 as const,
+      ranks: [1, 2, 3, 7] as const,
+    };
+    const suit = variant.suits[0];
+    expect(suit).toBeDefined();
+    if (suit === undefined) {
+      return;
+    }
+    expect(getNumCopiesOfCard(suit, 3, variant)).toBe(1);
+    expect(getNumCopiesOfCard(suit, 7, variant)).toBe(1);
+    expect(getTotalCardsInDeck(variant)).toBe(30);
   });
 });
