@@ -198,6 +198,69 @@ describe("client hypothetical planning", () => {
     });
   });
 
+  test("handles a spectator playing a face-down card in a hypothetical", () => {
+    const context = makeContext();
+    const cardIdentities = [
+      { suitIndex: null, rank: null },
+      context.cardIdentities[1]!,
+    ];
+    const dispatch = jest.fn();
+    const state = initialState(context.metadata);
+    const card = context.gameState.deck[0]!;
+    const morphedIdentities: Array<{ suitIndex: number; rank: Rank }> = [];
+
+    Object.assign(globals, {
+      metadata: context.metadata,
+      variant: context.variant,
+      deck: [
+        {
+          isStackBase: false,
+          state: card,
+          visibleSuitIndex: null,
+          visibleRank: null,
+        },
+      ],
+      state: {
+        ...state,
+        playing: false,
+        cardIdentities,
+        replay: {
+          ...state.replay,
+          hypothetical: {
+            ongoing: context.gameState,
+            morphedIdentities,
+          },
+        },
+      },
+      store: { dispatch },
+    });
+
+    // The spectator does not know this card's identity yet.
+    expect(() => {
+      sendHypotheticalAction({ type: ActionType.Play, target: 0 as CardOrder });
+    }).not.toThrow();
+    expect(dispatch).not.toHaveBeenCalled();
+
+    // After choosing its identity in the morph dialog, the play is valid.
+    morphedIdentities[0] = { suitIndex: 0, rank: 1 };
+    sendHypotheticalAction({ type: ActionType.Play, target: 0 as CardOrder });
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    expect(dispatch).toHaveBeenNthCalledWith(1, {
+      type: "hypoAction",
+      action: {
+        type: "play",
+        order: 0,
+        playerIndex: 0,
+        suitIndex: 0,
+        rank: 1,
+      },
+    });
+    expect(dispatch).toHaveBeenNthCalledWith(2, {
+      type: "hypoAction",
+      action: { type: "turn", num: 7, currentPlayerIndex: 1 },
+    });
+  });
+
   test("plans the exact final order without an existing UI card", () => {
     const context = makeContext();
     const intent = { type: "play", order: bottomOrder } as const;
