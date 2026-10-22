@@ -62,7 +62,7 @@ func (a *ActionPlay) Scrub(t *Table, userID int) {
 		return
 	}
 
-	if t.Game.Variant.IsThrowItInAHole() {
+	if t.Game.Variant.ThrowItInAHole {
 		a.Rank = -1
 		a.SuitIndex = -1
 	}
@@ -79,7 +79,7 @@ func (a *ActionDiscard) Scrub(t *Table, userID int) {
 		return
 	}
 
-	if t.Game.Variant.IsThrowItInAHole() && a.Failed {
+	if t.Game.Variant.ThrowItInAHole && a.Failed {
 		// For the purposes of hiding information, failed discards are equivalent to plays
 		a.Rank = -1
 		a.SuitIndex = -1

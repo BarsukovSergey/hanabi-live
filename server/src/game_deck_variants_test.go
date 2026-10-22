@@ -116,35 +116,7 @@ func TestCriticalRankForEveryRank(t *testing.T) {
 	}
 }
 
-func TestVariantPredicatesFollowFlags(t *testing.T) {
-	tests := []struct {
-		name   string
-		set    func(*Variant)
-		active func(*Variant) bool
-	}{
-		{"Alternating Clues", func(v *Variant) { v.AlternatingClues = true }, (*Variant).IsAlternatingClues},
-		{"Clue Starved", func(v *Variant) { v.ClueStarved = true }, (*Variant).IsClueStarved},
-		{"Cow & Pig", func(v *Variant) { v.CowAndPig = true }, (*Variant).IsCowAndPig},
-		{"Duck", func(v *Variant) { v.Duck = true }, (*Variant).IsDuck},
-		{"Throw It in a Hole", func(v *Variant) { v.ThrowItInAHole = true }, (*Variant).IsThrowItInAHole},
-		{"Up or Down", func(v *Variant) { v.UpOrDown = true }, (*Variant).IsUpOrDown},
-		{"Synesthesia", func(v *Variant) { v.Synesthesia = true }, (*Variant).IsSynesthesia},
-		{"Scarce Ones", func(v *Variant) { v.ScarceOnes = true }, (*Variant).IsScarceOnes},
-		{"Sudoku", func(v *Variant) { v.Sudoku = true }, (*Variant).IsSudoku},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			v := &Variant{Name: tc.name + " (5 Suits)"}
-			if tc.active(v) {
-				t.Fatal("the name alone must not enable the variant behavior")
-			}
-			v.Name = "Unrelated variant name"
-			tc.set(v)
-			if !tc.active(v) {
-				t.Fatal("the variant flag must enable behavior regardless of its name")
-			}
-		})
-	}
+func TestVariantFlagConsumers(t *testing.T) {
 	if got := (&Variant{Name: "Clue Starved (5 Suits)"}).GetAdjustedClueTokens(8); got != 8 {
 		t.Errorf("name-only Clue Starved incorrectly adjusted tokens: %d", got)
 	}

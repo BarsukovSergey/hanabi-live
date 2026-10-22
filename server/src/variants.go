@@ -274,7 +274,7 @@ func variantIsCardTouched(variant *Variant, clue Clue, card *Card) bool {
 			return false
 		}
 
-		if variant.IsSynesthesia() && !suit.NoClueRanks {
+		if variant.Synesthesia && !suit.NoClueRanks {
 			// In addition to any other matching, match color based on rank.
 			prismColorIndex := (card.Rank - 1) % len(variant.ClueColors)
 			prismColorName := variant.ClueColors[prismColorIndex]

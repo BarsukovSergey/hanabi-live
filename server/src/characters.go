@@ -457,7 +457,7 @@ func characterCheckMisplay(g *Game, p *GamePlayer, c *Card) bool {
 	if p.Character == "Follower" { // 31
 		// Look through the stacks to see if two cards of this rank have already been played
 		numPlayedOfThisRank := 0
-		if variant.IsSudoku() {
+		if variant.Sudoku {
 			for suitIndex, lastRank := range g.Stacks {
 				if lastRank == 0 {
 					continue

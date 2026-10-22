@@ -139,7 +139,7 @@ func NewGame(t *Table) *Game {
 
 	// Reverse the stack direction of reversed suits, except on the "Up or Down" variant
 	// that uses the "Undecided" direction.
-	if variant.HasReversedSuits() && !variant.IsUpOrDown() {
+	if variant.HasReversedSuits() && !variant.UpOrDown {
 		for i, s := range variant.Suits {
 			if s.Reversed {
 				g.PlayStackDirections[i] = StackDirectionDown
@@ -308,7 +308,7 @@ func (g *Game) CheckEnd() bool {
 		if !variantReversibleCheckAllDead(g) {
 			return false
 		}
-	} else if variant.IsSudoku() {
+	} else if variant.Sudoku {
 		if !variantSudokuCheckAllDead(g) {
 			return false
 		}
@@ -374,7 +374,7 @@ func (g *Game) GetMaxScore() int {
 	// "Reversed", "Up or Down" or "Sudoku" variant
 	if g.Variant.HasReversedSuits() {
 		return variantReversibleGetMaxScore(g)
-	} else if g.Variant.IsSudoku() {
+	} else if g.Variant.Sudoku {
 		return variantSudokuGetMaxScore(g)
 	}
 

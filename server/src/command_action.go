@@ -390,7 +390,7 @@ func commandActionClue(s *Session, d *CommandData, g *Game, p *GamePlayer) bool 
 	}
 
 	// Validate special variant restrictions
-	if variant.IsAlternatingClues() && clue.Type == g.LastClueTypeGiven {
+	if variant.AlternatingClues && clue.Type == g.LastClueTypeGiven {
 		s.Warning("You cannot give two clues of the same time in a row in this variant.")
 		g.InvalidActionOccurred = true
 		return false

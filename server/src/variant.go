@@ -40,44 +40,8 @@ type Variant struct {
 	MaxScore                 int
 }
 
-func (v *Variant) IsAlternatingClues() bool {
-	return v.AlternatingClues
-}
-
-func (v *Variant) IsClueStarved() bool {
-	return v.ClueStarved
-}
-
-func (v *Variant) IsCowAndPig() bool {
-	return v.CowAndPig
-}
-
-func (v *Variant) IsDuck() bool {
-	return v.Duck
-}
-
-func (v *Variant) IsThrowItInAHole() bool {
-	return v.ThrowItInAHole
-}
-
-func (v *Variant) IsUpOrDown() bool {
-	return v.UpOrDown
-}
-
-func (v *Variant) IsSynesthesia() bool {
-	return v.Synesthesia
-}
-
-func (v *Variant) IsScarceOnes() bool {
-	return v.ScarceOnes
-}
-
-func (v *Variant) IsSudoku() bool {
-	return v.Sudoku
-}
-
 func (v *Variant) HasReversedSuits() bool {
-	if v.IsUpOrDown() {
+	if v.UpOrDown {
 		return true
 	}
 
@@ -122,7 +86,7 @@ func (v *Variant) GetAdjustedClueTokens(clueTokens int) int {
 	// In "Clue Starved" variants, each discard only grants 0.5 clue tokens
 	// This is represented on the server by discards granting 1 clue token and clues costing 2 tokens
 	// (to avoid having to use floating point numbers)
-	if v.IsClueStarved() {
+	if v.ClueStarved {
 		return clueTokens * 2
 	}
 
@@ -134,7 +98,7 @@ func (v *Variant) AtMaxClueTokens(clueTokens int) bool {
 }
 
 func (v *Variant) ShouldGiveClueTokenForFinishingStack() bool {
-	return !v.IsThrowItInAHole()
+	return !v.ThrowItInAHole
 }
 
 func (v *Variant) CalculateEfficiency(numPlayers int) float64 {
