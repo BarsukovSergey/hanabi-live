@@ -184,6 +184,27 @@ describe("card presentation", () => {
   });
 
   describe("knowledge pips", () => {
+    test("does not cross out deductions in Throw It in a Hole", () => {
+      const card: CardState = {
+        ...baseCard,
+        possibleCardsFromClues: [
+          [0, 1],
+          [1, 1],
+        ],
+        possibleCards: [[1, 1]],
+      };
+      const holeVariant = { ...variant, throwItInAHole: true };
+      const ordinary = getCardPipPresentation(variant, card, emptyNote, false);
+      const hole = getCardPipPresentation(holeVariant, card, emptyNote, false);
+
+      expect(ordinary.suitPips[0]?.state).toBe(PipState.Eliminated);
+      expect(hole.suitPips[0]?.state).toBe(PipState.Visible);
+      expect(hole.suitPips[1]?.state).toBe(PipState.Visible);
+      expect(hole.rankPips.find((pip) => pip.rank === 1)?.state).toBe(
+        PipState.Visible,
+      );
+    });
+
     test("distinguishes visible, eliminated, hidden, and positive pips", () => {
       const positiveColor = variant.clueColors[1];
       expect(positiveColor).toBeDefined();

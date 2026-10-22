@@ -150,12 +150,16 @@ export function getCardPipPresentation(
     : state.possibleCards;
 
   for (const [suitIndex, rank] of possibleCardsFromClues) {
-    const pipState = possibleCards.some(
-      ([possibleSuitIndex, possibleRank]) =>
-        possibleSuitIndex === suitIndex && possibleRank === rank,
-    )
-      ? PipState.Visible
-      : PipState.Eliminated;
+    // In Throw It in a Hole, deductions can depend on the hidden outcome of plays.
+    // Do not reveal that information through crossed-out knowledge pips.
+    const pipState =
+      variant.throwItInAHole
+      || possibleCards.some(
+        ([possibleSuitIndex, possibleRank]) =>
+          possibleSuitIndex === suitIndex && possibleRank === rank,
+      )
+        ? PipState.Visible
+        : PipState.Eliminated;
 
     suitPipStates[suitIndex] =
       suitPipStates[suitIndex] === PipState.Visible
